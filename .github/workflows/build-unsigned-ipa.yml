@@ -34,8 +34,7 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            build
+            CODE_SIGN_IDENTITY="" \\`r`n            VALIDATE_PRODUCT=NO \\`r`n            build
 
       - name: Package unsigned IPA
         run: |
