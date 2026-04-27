@@ -23,6 +23,26 @@ jobs:
           sudo xcode-select -s /Applications/Xcode.app
           xcodebuild -version
 
+      - name: Resolve packages
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -resolvePackageDependencies \
+            -project ccbili.xcodeproj \
+            -scheme ccbili \
+            -derivedDataPath build
+
+      - name: Patch package bundle identifiers
+        run: |
+          set -euo pipefail
+          find build/SourcePackages/checkouts -name Info.plist -print0 | while IFS= read -r -d '' plist; do
+            bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist" 2>/dev/null || true)
+            if [[ "$bundle_id" == *"_"* ]]; then
+              fixed_id=${bundle_id//_/-}
+              echo "Patching $plist: $bundle_id -> $fixed_id"
+              /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $fixed_id" "$plist"
+            fi
+          done
       - name: Build app without signing
         run: |
           set -euo pipefail
