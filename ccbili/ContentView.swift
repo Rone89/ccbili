@@ -1,4 +1,4 @@
-//
+﻿//
 //  ContentView.swift
 //  ccbili
 //
@@ -15,12 +15,13 @@ private enum MainTab: Hashable {
 
 struct ContentView: View {
     @State private var selectedTab: MainTab = .home
+    @State private var isTabBarHidden = false
     @State private var lastHomeTapDate: Date = .distantPast
 
     var body: some View {
         TabView(selection: $selectedTab) {
             NavigationStack {
-                HomeView()
+                HomeView(isTabBarHidden: $isTabBarHidden)
             }
             .tabItem {
                 Label("首页", systemImage: "house")
@@ -28,7 +29,7 @@ struct ContentView: View {
             .tag(MainTab.home)
 
             NavigationStack {
-                SearchView()
+                SearchView(isTabBarHidden: $isTabBarHidden)
             }
             .tabItem {
                 Label("搜索", systemImage: "magnifyingglass")
@@ -42,7 +43,8 @@ struct ContentView: View {
                 Label("我的", systemImage: "person")
             }
             .tag(MainTab.profile)
-        }
+        }
+        .toolbar(isTabBarHidden ? .hidden : .visible, for: .tabBar)
         .onChange(of: selectedTab) { oldValue, newValue in
             guard newValue == .home else { return }
 
@@ -64,3 +66,4 @@ extension Notification.Name {
     static let homeTabDidRetap = Notification.Name("homeTabDidRetap")
     static let homeRefreshRequested = Notification.Name("homeRefreshRequested")
 }
+

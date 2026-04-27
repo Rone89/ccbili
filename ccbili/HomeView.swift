@@ -1,6 +1,11 @@
-import SwiftUI
+﻿import SwiftUI
 
 struct HomeView: View {
+    @Binding var isTabBarHidden: Bool
+
+    init(isTabBarHidden: Binding<Bool> = .constant(false)) {
+        _isTabBarHidden = isTabBarHidden
+    }
     @Environment(AuthManager.self) private var authManager
 
     @State private var viewModel = HomeViewModel()
@@ -125,7 +130,7 @@ struct HomeView: View {
         LazyVGrid(columns: columns, spacing: 14) {
             ForEach(viewModel.items) { item in
                 NavigationLink {
-                    VideoDetailView(item: item)
+                    VideoDetailView(item: item, isTabBarHidden: $isTabBarHidden)
                 } label: {
                     HomeRecommendationCardView(item: item)
                 }
@@ -294,3 +299,4 @@ private struct HomeScrollOffsetPreferenceKey: PreferenceKey {
         value = nextValue()
     }
 }
+

@@ -1,8 +1,9 @@
-import SwiftUI
+﻿import SwiftUI
 import AVKit
 
 struct VideoDetailView: View {
     @Environment(AuthManager.self) private var authManager
+    @Binding private var isTabBarHidden: Bool
 
     @State private var viewModel: VideoDetailViewModel
     @State private var favoriteViewModel = VideoFavoriteViewModel()
@@ -28,8 +29,9 @@ struct VideoDetailView: View {
     private let pageHorizontalInset: CGFloat = 16
     private let titleHorizontalInset: CGFloat = 16
 
-    init(item: VideoItem) {
+    init(item: VideoItem, isTabBarHidden: Binding<Bool> = .constant(false)) {
         _viewModel = State(initialValue: VideoDetailViewModel(item: item))
+        _isTabBarHidden = isTabBarHidden
     }
 
     var body: some View {
@@ -69,7 +71,9 @@ struct VideoDetailView: View {
         }
         .navigationTitle("视频详情")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .tabBar)
+         .onAppear {
+            isTabBarHidden = true
+        }
         .task {
             favoriteViewModel.load(videoID: viewModel.playbackItem.id)
 
@@ -100,6 +104,7 @@ struct VideoDetailView: View {
         }
         .onDisappear {
             configurePlayer(for: nil)
+            isTabBarHidden = false
         }
     }
 
@@ -933,3 +938,4 @@ private enum CommentSortMode: CaseIterable {
         }
     }
 }
+

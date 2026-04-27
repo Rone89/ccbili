@@ -1,4 +1,4 @@
-//
+﻿//
 //  BilibiliVLCPlayerView.swift
 //  ccbili
 //
@@ -28,8 +28,6 @@ struct BilibiliVLCPlayerView: View {
     @State private var isSwitchingQuality = false
     @State private var qualityErrorMessage: String?
     @State private var isFullscreenPresented = false
-    @State private var fullscreenStartPosition: Double = 0
-    @State private var fullscreenReturnPosition: Double = 0
     @State private var pendingSeekPosition: Double?
     @State private var surfaceID = UUID()
 
@@ -77,6 +75,9 @@ struct BilibiliVLCPlayerView: View {
         }
         .background(.black)
         .clipped()
+        .aspectRatio(16 / 9, contentMode: isFullscreenPresented ? .fill : .fit)
+        .ignoresSafeArea(isFullscreenPresented ? .all : [], edges: .all)
+        .statusBarHidden(isFullscreenPresented)
         .onAppear {
             showControlsTemporarily()
             UIDevice.current.beginGeneratingDeviceOrientationNotifications()
@@ -90,16 +91,6 @@ struct BilibiliVLCPlayerView: View {
             surfaceID = UUID()
             showControlsTemporarily()
         }
-        .onChange(of: isFullscreenPresented) { _, isPresented in
-            commandCenter.stop()
-
-            if !isPresented {
-                pendingSeekPosition = fullscreenReturnPosition
-                surfaceID = UUID()
-                showControlsTemporarily()
-                schedulePendingSeekIfNeeded()
-            }
-        }
         .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
             guard enablesAutoFullscreen else {
                 return
@@ -108,21 +99,8 @@ struct BilibiliVLCPlayerView: View {
             let orientation = UIDevice.current.orientation
 
             if orientation == .landscapeLeft || orientation == .landscapeRight {
-                fullscreenStartPosition = playbackState.position
-                fullscreenReturnPosition = playbackState.position
                 isFullscreenPresented = true
             } else if orientation == .portrait || orientation == .portraitUpsideDown {
-                isFullscreenPresented = false
-            }
-        }
-        .fullScreenCover(isPresented: $isFullscreenPresented) {
-            BilibiliVLCFullscreenPlayerView(
-                source: currentSource,
-                initialPosition: fullscreenStartPosition,
-                onPositionChange: { position in
-                    fullscreenReturnPosition = position
-                }
-            ) {
                 isFullscreenPresented = false
             }
         }
@@ -356,49 +334,6 @@ struct BilibiliVLCPlayerView: View {
 
         isSwitchingQuality = false
         showControlsTemporarily()
-    }
-}
-
-private struct BilibiliVLCFullscreenPlayerView: View {
-    let source: PlayableVideoSource
-    let initialPosition: Double
-    let onPositionChange: (Double) -> Void
-    let dismiss: () -> Void
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Color.black
-                .ignoresSafeArea()
-
-            BilibiliVLCPlayerView(
-                source: source,
-                enablesAutoFullscreen: false,
-                initialPosition: initialPosition,
-                onPositionChange: onPositionChange
-            )
-            .ignoresSafeArea()
-
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 32, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.92))
-                    .padding(18)
-            }
-            .buttonStyle(.plain)
-        }
-        .ignoresSafeArea()
-        .onAppear {
-            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
-            let orientation = UIDevice.current.orientation
-
-            if orientation == .portrait || orientation == .portraitUpsideDown {
-                dismiss()
-            }
-        }
     }
 }
 

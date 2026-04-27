@@ -12,7 +12,7 @@ permissions:
 jobs:
   build:
     name: Build unsigned IPA
-    runs-on: macos-15
+    runs-on: macos-26
 
     steps:
       - name: Checkout
@@ -20,7 +20,7 @@ jobs:
 
       - name: Select Xcode
         run: |
-          sudo xcode-select -s /Applications/Xcode.app
+          sudo xcode-select -s /Applications/Xcode_26.app
           xcodebuild -version
 
       - name: Build app without signing
@@ -29,7 +29,7 @@ jobs:
           xcodebuild \
             -project ccbili.xcodeproj \
             -scheme ccbili \
-            -configuration Debug \
+            -configuration Release \
             -sdk iphoneos \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
@@ -40,7 +40,7 @@ jobs:
       - name: Package unsigned IPA
         run: |
           set -euo pipefail
-          APP_PATH="build/Build/Products/Debug-iphoneos/ccbili.app"
+          APP_PATH="build/Build/Products/Release-iphoneos/ccbili.app"
           if [ ! -d "$APP_PATH" ]; then
             echo "App not found at $APP_PATH"
             find build/Build/Products -maxdepth 3 -type d -name "*.app" -print || true
@@ -65,5 +65,6 @@ jobs:
         with:
           files: ccbili-unsigned.ipa
           generate_release_notes: true
+
 
 

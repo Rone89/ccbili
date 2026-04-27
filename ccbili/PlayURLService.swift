@@ -21,7 +21,7 @@ struct PlayableVideoSource: Equatable {
 }
 
 struct PlayURLService {
-    private let defaultPreferredQuality = 112
+    private let defaultPreferredQuality = 116
 
     func fetchPlayableSource(
         bvid: String,
@@ -37,15 +37,6 @@ struct PlayURLService {
             "User-Agent": AppConfig.defaultUserAgent
         ]
 
-        if let durlSource = try await fetchDURLSource(
-            bvid: bvid,
-            cid: cid,
-            preferredQuality: quality,
-            headers: headers
-        ) {
-            return durlSource
-        }
-
         if let dashSource = try await fetchDASHSource(
             bvid: bvid,
             cid: cid,
@@ -55,6 +46,14 @@ struct PlayURLService {
             return dashSource
         }
 
+        if let durlSource = try await fetchDURLSource(
+            bvid: bvid,
+            cid: cid,
+            preferredQuality: min(quality, 80),
+            headers: headers
+        ) {
+            return durlSource
+        }
         throw APIError.serverMessage("未获取到可播放的视频地址")
     }
 
@@ -72,7 +71,7 @@ struct PlayURLService {
             bvid: bvid,
             cid: cid,
             preferredQuality: preferredQuality,
-            fnval: "16",
+            fnval: "4048",
             headers: headers
         )
 
@@ -140,9 +139,10 @@ struct PlayURLService {
             "cid": String(cid),
             "qn": String(preferredQuality),
             "fnval": fnval,
-            "fourk": "0",
-            "platform": "html5",
-            "high_quality": "1"
+            "fourk": "1",
+            "platform": "pc",
+            "high_quality": "1",
+            "try_look": "1"
         ])
 
         components?.queryItems = queryItems
@@ -234,7 +234,20 @@ struct PlayURLService {
             return []
         }
 
-        return acceptQuality.enumerated().map { index, quality in
+        let preferredOrder = [127, 126, 125, 120, 116, 112, 80, 74, 64, 32, 16, 6]
+        let sortedQualities = acceptQuality.sorted { lhs, rhs in
+            let lhsIndex = preferredOrder.firstIndex(of: lhs) ?? Int.max
+            let rhsIndex = preferredOrder.firstIndex(of: rhs) ?? Int.max
+
+            if lhsIndex != rhsIndex {
+                return lhsIndex < rhsIndex
+            }
+
+            return lhs > rhs
+        }
+
+        return sortedQualities.map { quality in
+            let index = acceptQuality.firstIndex(of: quality) ?? 0
             let description: String
 
             if let acceptDescription = data.acceptDescription,
@@ -298,3 +311,4 @@ struct PlayURLService {
         }
     }
 }
+

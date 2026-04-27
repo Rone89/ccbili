@@ -1,6 +1,11 @@
-import SwiftUI
+﻿import SwiftUI
 
 struct SearchView: View {
+    @Binding var isTabBarHidden: Bool
+
+    init(isTabBarHidden: Binding<Bool> = .constant(false)) {
+        _isTabBarHidden = isTabBarHidden
+    }
     @State private var viewModel = SearchViewModel()
 
     private let columns = [
@@ -72,7 +77,7 @@ struct SearchView: View {
                         LazyVGrid(columns: columns, spacing: 18) {
                             ForEach(viewModel.results) { item in
                                 NavigationLink {
-                                    VideoDetailView(item: item)
+                                    VideoDetailView(item: item, isTabBarHidden: $isTabBarHidden)
                                 } label: {
                                     VideoListRowView(
                                         title: item.title,
@@ -189,3 +194,4 @@ private struct FlexibleTagFlowView: View {
         return rows
     }
 }
+
