@@ -69,7 +69,6 @@ struct VideoDetailView: View {
         }
         .navigationTitle("视频详情")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .tabBar)
         .onAppear {
             AppOrientationController.lock(.portrait)
         }

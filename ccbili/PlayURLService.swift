@@ -37,15 +37,6 @@ struct PlayURLService {
             "User-Agent": AppConfig.defaultUserAgent
         ]
 
-        if let dashSource = try await fetchDASHSource(
-            bvid: bvid,
-            cid: cid,
-            preferredQuality: quality,
-            headers: headers
-        ) {
-            return dashSource
-        }
-
         if let durlSource = try await fetchDURLSource(
             bvid: bvid,
             cid: cid,
@@ -53,6 +44,15 @@ struct PlayURLService {
             headers: headers
         ) {
             return durlSource
+        }
+
+        if let dashSource = try await fetchDASHSource(
+            bvid: bvid,
+            cid: cid,
+            preferredQuality: quality,
+            headers: headers
+        ) {
+            return dashSource
         }
         throw APIError.serverMessage("未获取到可播放的视频地址")
     }

@@ -28,6 +28,7 @@ struct BilibiliVLCPlayerView: View {
     @State private var isSwitchingQuality = false
     @State private var qualityErrorMessage: String?
     @State private var isFullscreenPresented = false
+    @State private var fullscreenReturnPosition: Double?
     @State private var fullscreenOrientation: UIDeviceOrientation = .portrait
     @State private var pendingSeekPosition: Double?
     @State private var surfaceID = UUID()
@@ -47,42 +48,13 @@ struct BilibiliVLCPlayerView: View {
     }
 
     var body: some View {
-        ZStack {
-            BilibiliVLCVideoSurface(
-                source: currentSource,
-                playbackState: playbackState,
-                commandCenter: commandCenter
-            )
-            .id(surfaceID)
+        playerSurface
             .background(.black)
-
-            Color.black.opacity(0.001)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    toggleControlsVisibility()
-                }
-
-            if areControlsVisible {
-                controlsOverlay
-                    .transition(.opacity)
+            .clipped()
+            .statusBarHidden(isFullscreenPresented)
+            .fullScreenCover(isPresented: $isFullscreenPresented) {
+                fullscreenPlayerSurface
             }
-
-            if isSwitchingQuality {
-                ProgressView()
-                    .tint(.white)
-                    .padding(14)
-                    .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-        }
-        .background(.black)
-        .clipped()
-        .frame(
-            width: isFullscreenPresented ? fullscreenSize.width : nil,
-            height: isFullscreenPresented ? fullscreenSize.height : nil
-        )
-        .rotationEffect(fullscreenRotation)
-        .ignoresSafeArea(isFullscreenPresented ? .all : [], edges: .all)
-        .statusBarHidden(isFullscreenPresented)
         .onAppear {
             showControlsTemporarily()
             UIDevice.current.beginGeneratingDeviceOrientationNotifications()
@@ -104,6 +76,7 @@ struct BilibiliVLCPlayerView: View {
             let orientation = UIDevice.current.orientation
 
             if orientation == .landscapeLeft || orientation == .landscapeRight {
+                fullscreenReturnPosition = playbackState.position
                 fullscreenOrientation = orientation
                 isFullscreenPresented = true
             } else if orientation == .portrait || orientation == .portraitUpsideDown {
@@ -113,6 +86,73 @@ struct BilibiliVLCPlayerView: View {
         .onDisappear {
             hideControlsTask?.cancel()
             commandCenter.stop()
+        }
+    }
+
+    private var playerSurface: some View {
+        ZStack {
+            videoSurface
+
+            Color.black.opacity(0.001)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    toggleControlsVisibility()
+                }
+
+            playerOverlays
+        }
+    }
+
+    private var fullscreenPlayerSurface: some View {
+        ZStack {
+            videoSurface
+
+            Color.black.opacity(0.001)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    toggleControlsVisibility()
+                }
+
+            playerOverlays
+        }
+        .frame(width: fullscreenSize.width, height: fullscreenSize.height)
+        .background(.black)
+        .rotationEffect(fullscreenRotation)
+        .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height)
+        .ignoresSafeArea()
+        .onAppear {
+            pendingSeekPosition = fullscreenReturnPosition ?? playbackState.position
+            schedulePendingSeekIfNeeded()
+        }
+        .onDisappear {
+            fullscreenReturnPosition = playbackState.position
+            pendingSeekPosition = playbackState.position
+            schedulePendingSeekIfNeeded()
+        }
+    }
+
+    private var videoSurface: some View {
+        BilibiliVLCVideoSurface(
+            source: currentSource,
+            playbackState: playbackState,
+            commandCenter: commandCenter
+        )
+        .id(surfaceID)
+        .background(.black)
+    }
+
+    @ViewBuilder
+    private var playerOverlays: some View {
+        if areControlsVisible {
+            controlsOverlay
+                .transition(.opacity)
+        }
+
+        if isSwitchingQuality {
+            ProgressView()
+                .tint(.white)
+                .padding(14)
+                .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
 

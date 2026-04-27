@@ -15,18 +15,11 @@ private enum MainTab: Hashable {
 
 struct ContentView: View {
     @State private var selectedTab: MainTab = .home
-    @State private var homePath = NavigationPath()
-    @State private var searchPath = NavigationPath()
-    @State private var profilePath = NavigationPath()
     @State private var lastHomeTapDate: Date = .distantPast
-
-    private var isTabBarHidden: Bool {
-        !homePath.isEmpty || !searchPath.isEmpty || !profilePath.isEmpty
-    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            NavigationStack(path: $homePath) {
+            NavigationStack {
                 HomeView()
             }
             .tabItem {
@@ -34,7 +27,7 @@ struct ContentView: View {
             }
             .tag(MainTab.home)
 
-            NavigationStack(path: $searchPath) {
+            NavigationStack {
                 SearchView()
             }
             .tabItem {
@@ -42,7 +35,7 @@ struct ContentView: View {
             }
             .tag(MainTab.search)
 
-            NavigationStack(path: $profilePath) {
+            NavigationStack {
                 ProfileView()
             }
             .tabItem {
@@ -50,7 +43,6 @@ struct ContentView: View {
             }
             .tag(MainTab.profile)
         }
-        .toolbar(isTabBarHidden ? .hidden : .visible, for: .tabBar)
         .onAppear {
             AppOrientationController.lock(.portrait)
         }

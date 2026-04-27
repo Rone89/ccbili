@@ -64,16 +64,22 @@ struct RemoteImageView<Placeholder: View, FailureView: View>: View {
         phase = .loading
 
         var configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 15
-        configuration.timeoutIntervalForResource = 20
+        configuration.timeoutIntervalForRequest = 8
+        configuration.timeoutIntervalForResource = 15
         configuration.requestCachePolicy = .returnCacheDataElseLoad
+        configuration.urlCache = URLCache(
+            memoryCapacity: 80 * 1024 * 1024,
+            diskCapacity: 300 * 1024 * 1024,
+            diskPath: "ccbili-image-cache"
+        )
 
         let session = URLSession(configuration: configuration)
 
         var request = URLRequest(url: url)
         request.setValue(AppConfig.defaultUserAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("https://www.bilibili.com/", forHTTPHeaderField: "Referer")
-        request.setValue("image/avif,image/webp,image/apng,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
+        request.cachePolicy = .returnCacheDataElseLoad
+        request.setValue("image/webp,image/apng,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
 
         do {
             let (data, response) = try await session.data(for: request)
