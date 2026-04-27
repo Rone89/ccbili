@@ -3,7 +3,6 @@ import AVKit
 
 struct VideoDetailView: View {
     @Environment(AuthManager.self) private var authManager
-    @Binding private var isTabBarHidden: Bool
 
     @State private var viewModel: VideoDetailViewModel
     @State private var favoriteViewModel = VideoFavoriteViewModel()
@@ -29,9 +28,8 @@ struct VideoDetailView: View {
     private let pageHorizontalInset: CGFloat = 16
     private let titleHorizontalInset: CGFloat = 16
 
-    init(item: VideoItem, isTabBarHidden: Binding<Bool> = .constant(false)) {
+    init(item: VideoItem) {
         _viewModel = State(initialValue: VideoDetailViewModel(item: item))
-        _isTabBarHidden = isTabBarHidden
     }
 
     var body: some View {
@@ -73,8 +71,7 @@ struct VideoDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
-            isTabBarHidden = true
-            AppOrientationController.lock(.allButUpsideDown)
+            AppOrientationController.lock(.portrait)
         }
         .task {
             favoriteViewModel.load(videoID: viewModel.playbackItem.id)
@@ -106,7 +103,6 @@ struct VideoDetailView: View {
         }
         .onDisappear {
             configurePlayer(for: nil)
-            isTabBarHidden = false
             AppOrientationController.lock(.portrait)
         }
     }

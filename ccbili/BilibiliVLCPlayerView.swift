@@ -28,6 +28,7 @@ struct BilibiliVLCPlayerView: View {
     @State private var isSwitchingQuality = false
     @State private var qualityErrorMessage: String?
     @State private var isFullscreenPresented = false
+    @State private var fullscreenOrientation: UIDeviceOrientation = .portrait
     @State private var pendingSeekPosition: Double?
     @State private var surfaceID = UUID()
 
@@ -75,7 +76,11 @@ struct BilibiliVLCPlayerView: View {
         }
         .background(.black)
         .clipped()
-        .aspectRatio(16 / 9, contentMode: isFullscreenPresented ? .fill : .fit)
+        .frame(
+            width: isFullscreenPresented ? fullscreenSize.width : nil,
+            height: isFullscreenPresented ? fullscreenSize.height : nil
+        )
+        .rotationEffect(fullscreenRotation)
         .ignoresSafeArea(isFullscreenPresented ? .all : [], edges: .all)
         .statusBarHidden(isFullscreenPresented)
         .onAppear {
@@ -99,6 +104,7 @@ struct BilibiliVLCPlayerView: View {
             let orientation = UIDevice.current.orientation
 
             if orientation == .landscapeLeft || orientation == .landscapeRight {
+                fullscreenOrientation = orientation
                 isFullscreenPresented = true
             } else if orientation == .portrait || orientation == .portraitUpsideDown {
                 isFullscreenPresented = false
@@ -108,6 +114,16 @@ struct BilibiliVLCPlayerView: View {
             hideControlsTask?.cancel()
             commandCenter.stop()
         }
+    }
+
+    private var fullscreenSize: CGSize {
+        let bounds = UIScreen.main.bounds
+        return CGSize(width: bounds.height, height: bounds.width)
+    }
+
+    private var fullscreenRotation: Angle {
+        guard isFullscreenPresented else { return .zero }
+        return fullscreenOrientation == .landscapeLeft ? .degrees(90) : .degrees(-90)
     }
 
     private var controlsOverlay: some View {
@@ -453,8 +469,7 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
             player.stop()
 
             let options = makeOptions(for: source)
-            let playableURL = (try? DASHManifestService.manifestURL(for: source)) ?? source.url
-            player.set(url: playableURL, options: options)
+            player.set(url: source.url, options: options)
             player.play()
         }
 
@@ -539,9 +554,6 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
             options.referer = source.headers["Referer"] ?? AppConfig.webBaseURL.absoluteString
             options.userAgent = source.headers["User-Agent"] ?? AppConfig.defaultUserAgent
             options.appendHeader(source.headers)
-            if source.audioURL != nil {
-                options.formatContextOptions["allowed_extensions"] = "ALL"
-            }
             return options
         }
 

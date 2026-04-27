@@ -1,14 +1,9 @@
 import SwiftUI
 
 struct ProfileView: View {
-    @Binding var isTabBarHidden: Bool
     @Environment(AuthManager.self) private var authManager
     @State private var isShowingQRCodeLogin = false
     @State private var isShowingWebLogin = false
-
-    init(isTabBarHidden: Binding<Bool> = .constant(false)) {
-        _isTabBarHidden = isTabBarHidden
-    }
 
     var body: some View {
         List {
@@ -22,7 +17,7 @@ struct ProfileView: View {
                     Text("已登录：\(authManager.username ?? "未知用户")")
 
                     NavigationLink {
-                        HistoryView(isTabBarHidden: $isTabBarHidden)
+                        HistoryView()
                     } label: {
                         Label("历史观看", systemImage: "clock.arrow.circlepath")
                     }

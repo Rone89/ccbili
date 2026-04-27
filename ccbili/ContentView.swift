@@ -15,29 +15,35 @@ private enum MainTab: Hashable {
 
 struct ContentView: View {
     @State private var selectedTab: MainTab = .home
-    @State private var isTabBarHidden = false
+    @State private var homePath = NavigationPath()
+    @State private var searchPath = NavigationPath()
+    @State private var profilePath = NavigationPath()
     @State private var lastHomeTapDate: Date = .distantPast
+
+    private var isTabBarHidden: Bool {
+        !homePath.isEmpty || !searchPath.isEmpty || !profilePath.isEmpty
+    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            NavigationStack {
-                HomeView(isTabBarHidden: $isTabBarHidden)
+            NavigationStack(path: $homePath) {
+                HomeView()
             }
             .tabItem {
                 Label("首页", systemImage: "house")
             }
             .tag(MainTab.home)
 
-            NavigationStack {
-                SearchView(isTabBarHidden: $isTabBarHidden)
+            NavigationStack(path: $searchPath) {
+                SearchView()
             }
             .tabItem {
                 Label("搜索", systemImage: "magnifyingglass")
             }
             .tag(MainTab.search)
 
-            NavigationStack {
-                ProfileView(isTabBarHidden: $isTabBarHidden)
+            NavigationStack(path: $profilePath) {
+                ProfileView()
             }
             .tabItem {
                 Label("我的", systemImage: "person")

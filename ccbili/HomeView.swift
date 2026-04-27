@@ -1,11 +1,6 @@
 ﻿import SwiftUI
 
 struct HomeView: View {
-    @Binding var isTabBarHidden: Bool
-
-    init(isTabBarHidden: Binding<Bool> = .constant(false)) {
-        _isTabBarHidden = isTabBarHidden
-    }
     @Environment(AuthManager.self) private var authManager
 
     @State private var viewModel = HomeViewModel()
@@ -119,7 +114,7 @@ struct HomeView: View {
         LazyVGrid(columns: columns, spacing: 14) {
             ForEach(viewModel.items) { item in
                 NavigationLink {
-                    VideoDetailView(item: item, isTabBarHidden: $isTabBarHidden)
+                    VideoDetailView(item: item)
                 } label: {
                     HomeRecommendationCardView(item: item)
                 }
@@ -135,7 +130,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("推荐")
+                    Text("首页")
                         .font(.system(size: 42, weight: .heavy, design: .rounded))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
@@ -164,8 +159,11 @@ struct HomeView: View {
                     .accessibilityLabel("回到顶部")
 
                     Button {
+                        Task {
+                            await refreshHome()
+                        }
                     } label: {
-                        Text("选择")
+                        Text("刷新")
                             .font(.system(size: 18, weight: .bold, design: .rounded))
                             .foregroundStyle(.primary)
                             .padding(.horizontal, 24)
@@ -175,12 +173,17 @@ struct HomeView: View {
                                 Capsule().strokeBorder(.white.opacity(0.45), lineWidth: 1)
                             }
                     }
-                    .accessibilityLabel("选择")
+                    .accessibilityLabel("刷新推荐")
                 }
                 .buttonStyle(.plain)
             }
 
-            HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("持续刷新你可能感兴趣的内容")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
                 currentUserAvatarView
 
                 Text(authManager.isLoggedIn ? (authManager.username ?? "已登录") : "未登录")
@@ -192,6 +195,7 @@ struct HomeView: View {
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
+                }
             }
         }
         .padding(.top, 8)
