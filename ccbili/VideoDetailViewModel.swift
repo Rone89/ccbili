@@ -72,12 +72,12 @@ final class VideoDetailViewModel {
                 throw APIError.invalidResponse
             }
 
-            descriptionText = detailData.desc ?? "鏆傛棤绠€浠?
+            descriptionText = detailData.desc ?? "暂无简介"
             uploadTimeText = formatUploadTime(from: detailData.pubdate ?? detailData.ctime)
 
             let resolvedCID = detailData.cid ?? detailData.pages?.first?.cid
             let ownerMID = detailData.owner?.mid
-            let ownerName = detailData.owner?.name ?? "鏈煡 UP 涓?
+            let ownerName = detailData.owner?.name ?? "未知 UP 主"
             let ownerFaceURL = normalizedImageURL(from: detailData.owner?.face)
 
             playbackItem = VideoItem(
@@ -107,11 +107,11 @@ final class VideoDetailViewModel {
                     comments = [
                         VideoComment(
                             id: "comment-load-failed",
-                            username: "绯荤粺鎻愮ず",
-                            message: "璇勮鍔犺浇澶辫触锛歕(error.localizedDescription)",
+                            username: "系统提示",
+                            message: "评论加载失败：\(error.localizedDescription)",
                             userID: nil,
                             avatarURL: nil,
-                            timeText: "鏃堕棿鏈煡"
+                            timeText: "时间未知"
                         )
                     ]
                 }
@@ -119,11 +119,11 @@ final class VideoDetailViewModel {
                 comments = [
                     VideoComment(
                         id: "comment-no-aid",
-                        username: "绯荤粺鎻愮ず",
-                        message: "缂哄皯 aid锛屾殏鏃舵棤娉曞姞杞借瘎璁?,
+                        username: "系统提示",
+                        message: "缺少 aid，暂时无法加载评论",
                         userID: nil,
                         avatarURL: nil,
-                        timeText: "鏃堕棿鏈煡"
+                        timeText: "时间未知"
                     )
                 ]
             }
@@ -136,8 +136,8 @@ final class VideoDetailViewModel {
 
                     return RelatedVideo(
                         id: relatedBVID,
-                        title: relatedItem.title ?? "鏈煡鏍囬",
-                        subtitle: relatedItem.owner?.name ?? "鏈煡 UP 涓?,
+                        title: relatedItem.title ?? "未知标题",
+                        subtitle: relatedItem.owner?.name ?? "未知 UP 主",
                         coverURL: normalizedImageURL(from: relatedItem.pic)
                     )
                 }
@@ -256,13 +256,13 @@ final class VideoDetailViewModel {
 
             return VideoAuthor(
                 name: fallbackName,
-                followerText: "绮変笣 \(formattedCount(follower))",
+                followerText: "粉丝 \(formattedCount(follower))",
                 avatarURL: face
             )
         } catch {
             return VideoAuthor(
                 name: fallbackName,
-                followerText: "绮変笣鏁拌幏鍙栧け璐?,
+                followerText: "粉丝数获取失败",
                 avatarURL: fallbackAvatarURL
             )
         }
@@ -270,14 +270,14 @@ final class VideoDetailViewModel {
 
     private func formattedCount(_ value: Int) -> String {
         if value >= 10_000 {
-            return String(format: "%.1f涓?, Double(value) / 10_000)
+            return String(format: "%.1f万", Double(value) / 10_000)
         }
         return "\(value)"
     }
 
     private func formatUploadTime(from timestamp: Int?) -> String {
         guard let timestamp else {
-            return "涓婁紶鏃堕棿寰呮帴鍏?
+            return "上传时间待接入"
         }
 
         let date = Date(timeIntervalSince1970: TimeInterval(timestamp))
