@@ -50,16 +50,6 @@ struct BilibiliVLCPlayerView: View {
         playerSurface
             .background(.black)
             .clipped()
-            .frame(
-                width: isFullscreenPresented ? fullscreenSize.width : nil,
-                height: isFullscreenPresented ? fullscreenSize.height : nil
-            )
-            .rotationEffect(fullscreenRotation)
-            .frame(
-                width: isFullscreenPresented ? UIScreen.main.bounds.width : nil,
-                height: isFullscreenPresented ? UIScreen.main.bounds.height : nil
-            )
-            .ignoresSafeArea(isFullscreenPresented ? .all : [], edges: .all)
             .statusBarHidden(isFullscreenPresented)
             .animation(.easeInOut(duration: 0.25), value: isFullscreenPresented)
         .onAppear {
@@ -113,7 +103,9 @@ struct BilibiliVLCPlayerView: View {
         BilibiliVLCVideoSurface(
             source: currentSource,
             playbackState: playbackState,
-            commandCenter: commandCenter
+            commandCenter: commandCenter,
+            isFullscreen: isFullscreenPresented,
+            fullscreenOrientation: fullscreenOrientation
         )
         .id(surfaceID)
         .background(.black)
@@ -132,16 +124,6 @@ struct BilibiliVLCPlayerView: View {
                 .padding(14)
                 .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-    }
-
-    private var fullscreenSize: CGSize {
-        let bounds = UIScreen.main.bounds
-        return CGSize(width: bounds.height, height: bounds.width)
-    }
-
-    private var fullscreenRotation: Angle {
-        guard isFullscreenPresented else { return .zero }
-        return fullscreenOrientation == .landscapeLeft ? .degrees(90) : .degrees(-90)
     }
 
     private var controlsOverlay: some View {
@@ -409,6 +391,8 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
     let source: PlayableVideoSource
     let playbackState: BilibiliVLCPlaybackState
     let commandCenter: BilibiliVLCCommandCenter
+    let isFullscreen: Bool
+    let fullscreenOrientation: UIDeviceOrientation
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -428,6 +412,7 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.attach(to: uiView)
         context.coordinator.play(source: source)
+        context.coordinator.setFullscreen(isFullscreen, orientation: fullscreenOrientation)
     }
 
     static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
@@ -443,6 +428,12 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
         private weak var playbackState: BilibiliVLCPlaybackState?
         private weak var commandCenter: BilibiliVLCCommandCenter?
         private var currentSource: PlayableVideoSource?
+        private var audioPlayer: AVPlayer?
+        private var audioTimeObserver: Any?
+        private weak var inlineView: UIView?
+        private var fullscreenWindow: UIWindow?
+        private let fullscreenContainer = UIView()
+        private var isFullscreen = false
 
         init(
             playbackState: BilibiliVLCPlaybackState,
@@ -456,10 +447,27 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
         }
 
         func attach(to view: UIView) {
+            inlineView = view
+            guard !isFullscreen else { return }
+
             guard player.player.view?.superview !== view else {
                 return
             }
 
+            attachPlayerView(to: view)
+        }
+
+        func setFullscreen(_ fullscreen: Bool, orientation: UIDeviceOrientation) {
+            guard isFullscreen != fullscreen || fullscreen else { return }
+
+            if fullscreen {
+                enterFullscreen(orientation: orientation)
+            } else {
+                exitFullscreen()
+            }
+        }
+
+        private func attachPlayerView(to view: UIView) {
             player.player.view?.removeFromSuperview()
 
             guard let playerView = player.player.view else {
@@ -476,6 +484,56 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
             ])
         }
 
+        private func enterFullscreen(orientation: UIDeviceOrientation) {
+            guard fullscreenWindow == nil else { return }
+            guard let windowScene = inlineView?.window?.windowScene ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else {
+                return
+            }
+
+            isFullscreen = true
+
+            let window = UIWindow(windowScene: windowScene)
+            window.windowLevel = .statusBar + 1
+            window.backgroundColor = .black
+
+            let controller = UIViewController()
+            controller.view.backgroundColor = .black
+            window.rootViewController = controller
+            window.isHidden = false
+            fullscreenWindow = window
+
+            fullscreenContainer.backgroundColor = .black
+            controller.view.addSubview(fullscreenContainer)
+            fullscreenContainer.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                fullscreenContainer.centerXAnchor.constraint(equalTo: controller.view.centerXAnchor),
+                fullscreenContainer.centerYAnchor.constraint(equalTo: controller.view.centerYAnchor),
+                fullscreenContainer.widthAnchor.constraint(equalTo: controller.view.heightAnchor),
+                fullscreenContainer.heightAnchor.constraint(equalTo: controller.view.widthAnchor)
+            ])
+
+            fullscreenContainer.transform = rotationTransform(for: orientation)
+            attachPlayerView(to: fullscreenContainer)
+        }
+
+        private func exitFullscreen() {
+            isFullscreen = false
+
+            if let inlineView {
+                attachPlayerView(to: inlineView)
+            }
+
+            fullscreenContainer.removeFromSuperview()
+            fullscreenWindow?.isHidden = true
+            fullscreenWindow = nil
+        }
+
+        private func rotationTransform(for orientation: UIDeviceOrientation) -> CGAffineTransform {
+            orientation == .landscapeLeft
+                ? CGAffineTransform(rotationAngle: .pi / 2)
+                : CGAffineTransform(rotationAngle: -.pi / 2)
+        }
+
         func play(source: PlayableVideoSource) {
             guard currentSource != source else {
                 return
@@ -485,14 +543,21 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
 
             configureAudioSession()
             player.stop()
+            stopAudio()
 
             let options = makeOptions(for: source)
             player.set(url: source.url, options: options)
+            if let audioURL = source.audioURL {
+                audioPlayer = AVPlayer(url: audioURL)
+            }
             player.play()
+            audioPlayer?.play()
         }
 
         func stop() {
             player.stop()
+            stopAudio()
+            exitFullscreen()
             currentSource = nil
         }
 
@@ -502,8 +567,11 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
 
                 if self.player.state.isPlaying {
                     self.player.pause()
+                    self.audioPlayer?.pause()
                 } else {
                     self.player.play()
+                    self.syncAudioToVideo()
+                    self.audioPlayer?.play()
                 }
 
                 self.updatePlaybackState()
@@ -517,6 +585,8 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
                 }
 
                 self.player.seek(time: duration * position, autoPlay: true) { [weak self] _ in
+                    self?.syncAudioToVideo()
+                    self?.audioPlayer?.play()
                     self?.updatePlaybackState()
                 }
             }
@@ -547,6 +617,43 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
                 playbackState.durationText = Self.format(seconds: duration)
                 playbackState.isPlaying = self.player.state.isPlaying
             }
+
+            syncAudioIfNeeded(videoTime: currentTime)
+        }
+
+        private func syncAudioToVideo() {
+            guard let audioPlayer else { return }
+            let currentTime = player.player.currentPlaybackTime
+            guard currentTime.isFinite, currentTime >= 0 else { return }
+
+            let audioTime = CMTime(seconds: currentTime, preferredTimescale: 600)
+            audioPlayer.seek(to: audioTime, toleranceBefore: .zero, toleranceAfter: .zero)
+        }
+
+        private func syncAudioIfNeeded(videoTime: TimeInterval) {
+            guard let audioPlayer, videoTime.isFinite else { return }
+
+            let audioTime = audioPlayer.currentTime().seconds
+            guard audioTime.isFinite else { return }
+
+            if abs(audioTime - videoTime) > 0.45 {
+                syncAudioToVideo()
+            }
+
+            if player.state.isPlaying, audioPlayer.timeControlStatus != .playing {
+                audioPlayer.play()
+            } else if !player.state.isPlaying, audioPlayer.timeControlStatus == .playing {
+                audioPlayer.pause()
+            }
+        }
+
+        private func stopAudio() {
+            if let audioTimeObserver {
+                audioPlayer?.removeTimeObserver(audioTimeObserver)
+                self.audioTimeObserver = nil
+            }
+            audioPlayer?.pause()
+            audioPlayer = nil
         }
 
         fileprivate static func format(seconds: TimeInterval) -> String {
@@ -606,6 +713,8 @@ extension BilibiliVLCVideoSurface.Coordinator: KSPlayerLayerDelegate {
             playbackState.durationText = Self.format(seconds: totalTime)
             playbackState.isPlaying = layer.state.isPlaying
         }
+
+        syncAudioIfNeeded(videoTime: currentTime)
     }
 
     func player(layer: KSPlayerLayer, finish error: Error?) {

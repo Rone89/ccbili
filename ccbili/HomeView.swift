@@ -53,13 +53,7 @@ struct HomeView: View {
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("为你推荐")
-                            .font(.title2.weight(.bold))
-                            .foregroundStyle(.primary)
-
-                        gridSection
-                    }
+                    gridSection
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 12)
@@ -127,36 +121,18 @@ struct HomeView: View {
     }
 
     private var titleSection: some View {
-        ZStack(alignment: .topTrailing) {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.08, green: 0.1, blue: 0.16),
-                            Color(red: 0.16, green: 0.15, blue: 0.28),
-                            Color(red: 0.27, green: 0.14, blue: 0.26)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+        HStack(alignment: .center) {
+            Text("推荐")
+                .font(.system(size: 42, weight: .heavy, design: .rounded))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text("推荐")
-                    .font(.system(size: 42, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer()
 
             currentUserAvatarView
         }
-        .frame(height: 220)
-        .padding(22)
-        .background(Color.clear)
+        .padding(.top, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
