@@ -44,7 +44,12 @@ struct PlayURLService {
                 preferredQuality: quality,
                 headers: headers
             ) {
-                return durlSource
+                return await sourceByMergingDASHQualities(
+                    into: durlSource,
+                    bvid: bvid,
+                    cid: cid,
+                    headers: headers
+                )
             }
         }
 
@@ -88,7 +93,7 @@ struct PlayURLService {
             headers: headers
         )
 
-        guard let video = bestDashVideo(from: data) else {
+        guard let video = bestDashVideo(from: data, preferredQuality: preferredQuality) else {
             return nil
         }
 
@@ -166,6 +171,67 @@ struct PlayURLService {
         return nil
     }
 
+    private func sourceByMergingDASHQualities(
+        into source: PlayableVideoSource,
+        bvid: String,
+        cid: Int,
+        headers: [String: String]
+    ) async -> PlayableVideoSource {
+        do {
+            let dashData = try await fetchPlayURLData(
+                bvid: bvid,
+                cid: cid,
+                preferredQuality: 116,
+                fnval: "4048",
+                headers: headers
+            )
+            let mergedQualities = mergedQualityOptions(
+                source.availableQualities,
+                qualityOptions(from: dashData)
+            )
+
+            return PlayableVideoSource(
+                url: source.url,
+                audioURL: source.audioURL,
+                headers: source.headers,
+                quality: source.quality,
+                qualityDescription: source.qualityDescription,
+                availableQualities: mergedQualities,
+                bvid: source.bvid,
+                cid: source.cid
+            )
+        } catch {
+            return source
+        }
+    }
+
+    private func mergedQualityOptions(
+        _ primary: [VideoQualityOption],
+        _ secondary: [VideoQualityOption]
+    ) -> [VideoQualityOption] {
+        var descriptionsByQuality: [Int: String] = [:]
+        for option in primary + secondary {
+            descriptionsByQuality[option.quality] = option.description
+        }
+
+        let preferredOrder = [127, 126, 125, 120, 116, 112, 80, 74, 64, 32, 16, 6]
+        return descriptionsByQuality.keys.sorted { lhs, rhs in
+            let lhsIndex = preferredOrder.firstIndex(of: lhs) ?? Int.max
+            let rhsIndex = preferredOrder.firstIndex(of: rhs) ?? Int.max
+
+            if lhsIndex != rhsIndex {
+                return lhsIndex < rhsIndex
+            }
+
+            return lhs > rhs
+        }.map { quality in
+            VideoQualityOption(
+                quality: quality,
+                description: descriptionsByQuality[quality] ?? qualityText(for: quality)
+            )
+        }
+    }
+
     private func fetchPlayURLData(
         bvid: String,
         cid: Int,
@@ -208,12 +274,18 @@ struct PlayURLService {
         return data
     }
 
-    private func bestDashVideo(from data: PlayURLDataDTO) -> PlayURLDashVideoDTO? {
+    private func bestDashVideo(
+        from data: PlayURLDataDTO,
+        preferredQuality: Int
+    ) -> PlayURLDashVideoDTO? {
         guard let videos = data.dash?.video, !videos.isEmpty else {
             return nil
         }
 
-        let sortedVideos = videos.sorted { lhs, rhs in
+        let matchingVideos = videos.filter { $0.id == preferredQuality }
+        let candidates = matchingVideos.isEmpty ? videos : matchingVideos
+
+        let sortedVideos = candidates.sorted { lhs, rhs in
             if (lhs.id ?? 0) != (rhs.id ?? 0) {
                 return (lhs.id ?? 0) > (rhs.id ?? 0)
             }
