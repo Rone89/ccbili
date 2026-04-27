@@ -249,6 +249,72 @@ struct PlayURLService {
         headers: [String: String]
     ) async throws -> PlayURLDataDTO {
         var components = URLComponents(
+            url: AppConfig.apiBaseURL.appending(path: "/x/player/playurl"),
+            resolvingAgainstBaseURL: false
+        )
+
+        let queryItems = [
+            URLQueryItem(name: "bvid", value: bvid),
+            URLQueryItem(name: "cid", value: String(cid)),
+            URLQueryItem(name: "qn", value: String(preferredQuality)),
+            URLQueryItem(name: "fnval", value: fnval),
+            URLQueryItem(name: "fnver", value: "0"),
+            URLQueryItem(name: "otype", value: "json"),
+            URLQueryItem(name: "fourk", value: "1"),
+            URLQueryItem(name: "platform", value: "pc"),
+            URLQueryItem(name: "high_quality", value: "1"),
+            URLQueryItem(name: "try_look", value: "1")
+        ]
+
+        components?.queryItems = queryItems
+
+        guard let url = components?.url else {
+            throw APIError.invalidURL
+        }
+
+        let response = try await APIClient.shared.get(
+            url: url,
+            headers: headers,
+            as: PlayURLResponseDTO.self
+        )
+
+        guard response.code == 0, let data = response.data else {
+            return try await fetchWBIPlayURLData(
+                bvid: bvid,
+                cid: cid,
+                preferredQuality: preferredQuality,
+                fnval: fnval,
+                headers: headers
+            )
+        }
+
+        if preferredQuality > 80, !(data.acceptQuality ?? []).contains(where: { $0 >= 80 }) {
+            let wbiData = try await fetchWBIPlayURLData(
+                bvid: bvid,
+                cid: cid,
+                preferredQuality: preferredQuality,
+                fnval: fnval,
+                headers: headers
+            )
+
+            guard (wbiData.acceptQuality ?? []).contains(where: { $0 >= 80 }) else {
+                throw APIError.serverMessage("当前播放接口只返回了 720P 及以下清晰度，请确认账号已登录且具备高清视频权限")
+            }
+
+            return wbiData
+        }
+
+        return data
+    }
+
+    private func fetchWBIPlayURLData(
+        bvid: String,
+        cid: Int,
+        preferredQuality: Int,
+        fnval: String,
+        headers: [String: String]
+    ) async throws -> PlayURLDataDTO {
+        var components = URLComponents(
             url: AppConfig.apiBaseURL.appending(path: "/x/player/wbi/playurl"),
             resolvingAgainstBaseURL: false
         )
@@ -280,10 +346,6 @@ struct PlayURLService {
 
         guard response.code == 0, let data = response.data else {
             throw APIError.serverMessage(response.message.isEmpty ? "播放地址获取失败" : response.message)
-        }
-
-        guard preferredQuality <= 80 || (data.acceptQuality ?? []).contains(where: { $0 >= 80 }) else {
-            throw APIError.serverMessage("当前播放接口只返回了 720P 及以下清晰度，请确认账号已登录且具备高清视频权限")
         }
 
         return data
