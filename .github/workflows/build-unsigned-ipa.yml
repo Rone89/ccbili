@@ -29,7 +29,7 @@ jobs:
           xcodebuild \
             -project ccbili.xcodeproj \
             -scheme ccbili \
-            -configuration Release \
+            -configuration Debug \
             -sdk iphoneos \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
@@ -40,7 +40,7 @@ jobs:
       - name: Package unsigned IPA
         run: |
           set -euo pipefail
-          APP_PATH="build/Build/Products/Release-iphoneos/ccbili.app"
+          APP_PATH="build/Build/Products/Debug-iphoneos/ccbili.app"
           if [ ! -d "$APP_PATH" ]; then
             echo "App not found at $APP_PATH"
             find build/Build/Products -maxdepth 3 -type d -name "*.app" -print || true
@@ -65,4 +65,5 @@ jobs:
         with:
           files: ccbili-unsigned.ipa
           generate_release_notes: true
+
 
