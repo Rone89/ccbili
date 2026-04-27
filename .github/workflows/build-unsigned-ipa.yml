@@ -28,7 +28,7 @@ jobs:
           set -euo pipefail
           xcodebuild \
             -project ccbili.xcodeproj \
-            -target ccbili \
+            -scheme ccbili \
             -configuration Release \
             -sdk iphoneos \
             -derivedDataPath build \
@@ -65,3 +65,4 @@ jobs:
         with:
           files: ccbili-unsigned.ipa
           generate_release_notes: true
+
