@@ -29,8 +29,6 @@ struct HomeView: View {
                     .id(scrollTargetID)
 
                 VStack(alignment: .leading, spacing: 18) {
-                    titleSection
-
                     if let errorMessage = viewModel.errorMessage {
                         VStack(alignment: .leading, spacing: 8) {
                             Label("加载失败", systemImage: "exclamationmark.triangle.fill")
@@ -76,6 +74,11 @@ struct HomeView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    currentUserAvatarView
+                }
+            }
             .safeAreaInset(edge: .top, spacing: 0) {
                 topBarBackground
             }
@@ -114,22 +117,6 @@ struct HomeView: View {
         }
     }
 
-    private var titleSection: some View {
-        HStack(alignment: .center) {
-            Text("推荐")
-                .font(.system(size: 42, weight: .heavy, design: .rounded))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-
-            Spacer()
-
-            currentUserAvatarView
-        }
-        .padding(.top, 0)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     private var currentUserAvatarView: some View {
         Group {
             if let avatarURL = authManager.avatarURL {
@@ -159,13 +146,13 @@ struct HomeView: View {
                 defaultAvatarView
             }
         }
-        .frame(width: 52, height: 52)
+        .frame(width: 34, height: 34)
         .clipShape(Circle())
         .overlay {
             Circle()
                 .strokeBorder(.white.opacity(0.35), lineWidth: 1)
         }
-        .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 5)
+        .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 4)
     }
 
     private var defaultAvatarView: some View {
