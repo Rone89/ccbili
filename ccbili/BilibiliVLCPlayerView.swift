@@ -206,7 +206,7 @@ struct BilibiliVLCPlayerView: View {
             }
         } label: {
             HStack(spacing: 5) {
-                Text(currentSource.qualityDescription ?? "清晰度")
+                Text(currentSource.qualityDescription ?? "清晰�?)
                     .font(.caption.weight(.semibold))
 
                 Image(systemName: "chevron.down")
@@ -269,7 +269,7 @@ struct BilibiliVLCPlayerView: View {
             VideoQualityOption(quality: 32, description: "480P 清晰"),
             VideoQualityOption(quality: 64, description: "720P 高清"),
             VideoQualityOption(quality: 80, description: "1080P 高清"),
-            VideoQualityOption(quality: 112, description: "1080P+ 高码率")
+            VideoQualityOption(quality: 112, description: "1080P+ 高码�?)
         ]
     }
 
@@ -618,7 +618,7 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
     }
 }
 
-private extension BilibiliVLCVideoSurface.Coordinator: KSPlayerLayerDelegate {
+extension BilibiliVLCVideoSurface.Coordinator: KSPlayerLayerDelegate {
     func player(layer: KSPlayerLayer, state: KSPlayerState) {
         updatePlaybackState()
     }
