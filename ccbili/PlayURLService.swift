@@ -21,7 +21,7 @@ struct PlayableVideoSource: Equatable {
 }
 
 struct PlayURLService {
-    private let defaultPreferredQuality = 116
+    private let defaultPreferredQuality = 80
 
     func fetchPlayableSource(
         bvid: String,
@@ -93,16 +93,22 @@ struct PlayURLService {
         }
 
         if let audio = bestDashAudio(from: data) {
-            let manifestURL = try DashRemuxService().makeMPDManifest(
-                video: video,
-                audio: audio,
-                durationMilliseconds: data.duration,
+            guard let videoURL = streamURL(from: video.baseURL, backups: video.backupURL),
+                  let audioURL = streamURL(from: audio.baseURL, backups: audio.backupURL) else {
+                return nil
+            }
+
+            let mergedURL = try await DashRemuxService().remuxToMP4(
+                videoURL: videoURL,
+                audioURL: audioURL,
+                headers: headers,
                 bvid: bvid,
-                cid: cid
+                cid: cid,
+                quality: data.quality
             )
 
             return PlayableVideoSource(
-                url: manifestURL,
+                url: mergedURL,
                 audioURL: nil,
                 headers: headers,
                 quality: data.quality,

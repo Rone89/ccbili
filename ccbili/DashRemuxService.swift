@@ -1,148 +1,140 @@
-﻿import Foundation
+﻿import AVFoundation
+import Foundation
 
 struct DashRemuxService {
-    func makeMPDManifest(
-        video: PlayURLDashVideoDTO,
-        audio: PlayURLDashAudioDTO,
-        durationMilliseconds: Int?,
+    func remuxToMP4(
+        videoURL: URL,
+        audioURL: URL,
+        headers: [String: String],
         bvid: String,
-        cid: Int
-    ) throws -> URL {
-        guard let videoURL = streamURL(from: video.baseURL, backups: video.backupURL),
-              let audioURL = streamURL(from: audio.baseURL, backups: audio.backupURL) else {
-            throw APIError.serverMessage("DASH 音视频地址不完整")
+        cid: Int,
+        quality: Int?
+    ) async throws -> URL {
+        let directory = try workingDirectory(bvid: bvid, cid: cid, quality: quality)
+        let outputURL = directory.appendingPathComponent("merged.mp4")
+        if FileManager.default.fileExists(atPath: outputURL.path) {
+            return outputURL
         }
 
-        let directory = try manifestDirectory(bvid: bvid, cid: cid)
-        let manifestURL = directory.appendingPathComponent("manifest.mpd")
-        let mpd = makeMPD(
-            video: video,
-            videoURL: videoURL,
-            audio: audio,
-            audioURL: audioURL,
-            durationMilliseconds: durationMilliseconds
-        )
-        try mpd.write(to: manifestURL, atomically: true, encoding: .utf8)
-        return manifestURL
+        let videoFile = directory.appendingPathComponent("video.mp4")
+        let audioFile = directory.appendingPathComponent("audio.m4a")
+
+        async let videoDownload: Void = downloadIfNeeded(from: videoURL, to: videoFile, headers: headers)
+        async let audioDownload: Void = downloadIfNeeded(from: audioURL, to: audioFile, headers: headers)
+        _ = try await (videoDownload, audioDownload)
+
+        return try await merge(videoFile: videoFile, audioFile: audioFile, outputURL: outputURL)
     }
 
-    private func streamURL(from baseURL: String?, backups: [String]?) -> String? {
-        if let baseURL, !baseURL.isEmpty {
-            return baseURL
-        }
-
-        return backups?.first(where: { !$0.isEmpty })
-    }
-
-    private func manifestDirectory(bvid: String, cid: Int) throws -> URL {
+    private func workingDirectory(bvid: String, cid: Int, quality: Int?) throws -> URL {
+        let qualityValue = quality.map(String.init) ?? "auto"
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         let directory = caches
-            .appendingPathComponent("DashManifests", isDirectory: true)
-            .appendingPathComponent("\(bvid)-\(cid)", isDirectory: true)
+            .appendingPathComponent("DashRemux", isDirectory: true)
+            .appendingPathComponent("\(bvid)-\(cid)-\(qualityValue)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }
 
-    private func makeMPD(
-        video: PlayURLDashVideoDTO,
-        videoURL: String,
-        audio: PlayURLDashAudioDTO,
-        audioURL: String,
-        durationMilliseconds: Int?
-    ) -> String {
-        let duration = durationMilliseconds.map { isoDuration(milliseconds: $0) }
-        let durationAttribute = duration.map { " mediaPresentationDuration=\"\($0)\"" } ?? ""
-        let periodDurationAttribute = duration.map { " duration=\"\($0)\"" } ?? ""
-        let videoRepresentation = representation(
-            id: video.id ?? 0,
-            bandwidth: video.bandwidth ?? 0,
-            mimeType: video.mimeType ?? "video/mp4",
-            codecs: video.codecs ?? "",
-            baseURL: videoURL,
-            width: video.width,
-            height: video.height,
-            frameRate: video.frameRate,
-            segmentBase: video.segmentBase
+    private func downloadIfNeeded(from url: URL, to destination: URL, headers: [String: String]) async throws {
+        if FileManager.default.fileExists(atPath: destination.path) {
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 60
+        for (key, value) in enrichedHeaders(headers) {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+
+        let (temporaryURL, response) = try await URLSession.shared.download(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<300).contains(httpResponse.statusCode) else {
+            throw APIError.serverMessage("DASH 分离流下载失败")
+        }
+
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.removeItem(at: destination)
+        }
+        try FileManager.default.moveItem(at: temporaryURL, to: destination)
+    }
+
+    private func enrichedHeaders(_ headers: [String: String]) -> [String: String] {
+        var result = headers
+        let cookies = HTTPCookieStorage.shared.cookies ?? []
+        if let cookieHeader = HTTPCookie.requestHeaderFields(with: cookies)["Cookie"], !cookieHeader.isEmpty {
+            result["Cookie"] = cookieHeader
+        }
+        result["Accept"] = "*/*"
+        result["Connection"] = "keep-alive"
+        return result
+    }
+
+    private func merge(videoFile: URL, audioFile: URL, outputURL: URL) async throws -> URL {
+        let videoAsset = AVURLAsset(url: videoFile)
+        let audioAsset = AVURLAsset(url: audioFile)
+        let composition = AVMutableComposition()
+
+        guard let sourceVideoTrack = try await videoAsset.loadTracks(withMediaType: .video).first,
+              let compositionVideoTrack = composition.addMutableTrack(
+                withMediaType: .video,
+                preferredTrackID: kCMPersistentTrackID_Invalid
+              ) else {
+            throw APIError.serverMessage("DASH 视频轨读取失败")
+        }
+
+        let videoTimeRange = try await sourceVideoTrack.load(.timeRange)
+        try compositionVideoTrack.insertTimeRange(videoTimeRange, of: sourceVideoTrack, at: .zero)
+        compositionVideoTrack.preferredTransform = try await sourceVideoTrack.load(.preferredTransform)
+
+        guard let sourceAudioTrack = try await audioAsset.loadTracks(withMediaType: .audio).first,
+              let compositionAudioTrack = composition.addMutableTrack(
+                withMediaType: .audio,
+                preferredTrackID: kCMPersistentTrackID_Invalid
+              ) else {
+            throw APIError.serverMessage("DASH 音频轨读取失败")
+        }
+
+        let audioTimeRange = try await sourceAudioTrack.load(.timeRange)
+        let audioDuration = CMTimeCompare(audioTimeRange.duration, videoTimeRange.duration) < 0
+            ? audioTimeRange.duration
+            : videoTimeRange.duration
+        try compositionAudioTrack.insertTimeRange(
+            CMTimeRange(start: audioTimeRange.start, duration: audioDuration),
+            of: sourceAudioTrack,
+            at: .zero
         )
-        let audioRepresentation = representation(
-            id: audio.id ?? 0,
-            bandwidth: audio.bandwidth ?? 0,
-            mimeType: audio.mimeType ?? "audio/mp4",
-            codecs: audio.codecs ?? "",
-            baseURL: audioURL,
-            width: nil,
-            height: nil,
-            frameRate: nil,
-            segmentBase: audio.segmentBase
-        )
 
-        return """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <MPD xmlns="urn:mpeg:dash:schema:mpd:2011" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011" type="static"\(durationAttribute) minBufferTime="PT1.5S">
-          <Period id="0" start="PT0S"\(periodDurationAttribute)>
-            <AdaptationSet id="0" contentType="video" segmentAlignment="true" subsegmentAlignment="true">
-        \(videoRepresentation)
-            </AdaptationSet>
-            <AdaptationSet id="1" contentType="audio" segmentAlignment="true" subsegmentAlignment="true">
-        \(audioRepresentation)
-            </AdaptationSet>
-          </Period>
-        </MPD>
-        """
-    }
-
-    private func representation(
-        id: Int,
-        bandwidth: Int,
-        mimeType: String,
-        codecs: String,
-        baseURL: String,
-        width: Int?,
-        height: Int?,
-        frameRate: String?,
-        segmentBase: PlayURLSegmentBaseDTO?
-    ) -> String {
-        var attributes = [
-            "id=\"\(id)\"",
-            "bandwidth=\"\(bandwidth)\"",
-            "mimeType=\"\(xmlEscape(mimeType))\"",
-            "codecs=\"\(xmlEscape(codecs))\""
-        ]
-
-        if let width {
-            attributes.append("width=\"\(width)\"")
-        }
-        if let height {
-            attributes.append("height=\"\(height)\"")
-        }
-        if let frameRate, !frameRate.isEmpty {
-            attributes.append("frameRate=\"\(xmlEscape(frameRate))\"")
+        if FileManager.default.fileExists(atPath: outputURL.path) {
+            try FileManager.default.removeItem(at: outputURL)
         }
 
-        let initialization = segmentBase?.initialization ?? "0-0"
-        let indexRange = segmentBase?.indexRange ?? "0-0"
+        guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough) else {
+            throw APIError.serverMessage("DASH 合流导出器创建失败")
+        }
 
-        return """
-              <Representation \(attributes.joined(separator: " "))>
-                <BaseURL>\(xmlEscape(baseURL))</BaseURL>
-                <SegmentBase indexRange="\(xmlEscape(indexRange))">
-                  <Initialization range="\(xmlEscape(initialization))" />
-                </SegmentBase>
-              </Representation>
-        """
+        exporter.outputURL = outputURL
+        exporter.outputFileType = .mp4
+        exporter.shouldOptimizeForNetworkUse = true
+
+        try await exporter.exportAsync()
+        return outputURL
     }
+}
 
-    private func isoDuration(milliseconds: Int) -> String {
-        let seconds = Double(milliseconds) / 1000
-        return String(format: "PT%.3fS", seconds)
-    }
-
-    private func xmlEscape(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "\"", with: "&quot;")
-            .replacingOccurrences(of: "'", with: "&apos;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
+private extension AVAssetExportSession {
+    func exportAsync() async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            exportAsynchronously {
+                switch self.status {
+                case .completed:
+                    continuation.resume()
+                case .failed, .cancelled:
+                    continuation.resume(throwing: self.error ?? APIError.serverMessage("DASH 合流导出失败"))
+                default:
+                    continuation.resume(throwing: APIError.serverMessage("DASH 合流状态异常"))
+                }
+            }
+        }
     }
 }
