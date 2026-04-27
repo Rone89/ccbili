@@ -453,7 +453,8 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
             player.stop()
 
             let options = makeOptions(for: source)
-            player.set(url: source.url, options: options)
+            let playableURL = (try? DASHManifestService.manifestURL(for: source)) ?? source.url
+            player.set(url: playableURL, options: options)
             player.play()
         }
 
@@ -538,6 +539,9 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
             options.referer = source.headers["Referer"] ?? AppConfig.webBaseURL.absoluteString
             options.userAgent = source.headers["User-Agent"] ?? AppConfig.defaultUserAgent
             options.appendHeader(source.headers)
+            if source.audioURL != nil {
+                options.formatContextOptions["allowed_extensions"] = "ALL"
+            }
             return options
         }
 

@@ -37,7 +37,7 @@ struct ContentView: View {
             .tag(MainTab.search)
 
             NavigationStack {
-                ProfileView()
+                ProfileView(isTabBarHidden: $isTabBarHidden)
             }
             .tabItem {
                 Label("我的", systemImage: "person")
@@ -45,6 +45,9 @@ struct ContentView: View {
             .tag(MainTab.profile)
         }
         .toolbar(isTabBarHidden ? .hidden : .visible, for: .tabBar)
+        .onAppear {
+            AppOrientationController.lock(.portrait)
+        }
         .onChange(of: selectedTab) { oldValue, newValue in
             guard newValue == .home else { return }
 

@@ -71,8 +71,10 @@ struct VideoDetailView: View {
         }
         .navigationTitle("视频详情")
         .navigationBarTitleDisplayMode(.inline)
-         .onAppear {
+        .toolbar(.hidden, for: .tabBar)
+        .onAppear {
             isTabBarHidden = true
+            AppOrientationController.lock(.allButUpsideDown)
         }
         .task {
             favoriteViewModel.load(videoID: viewModel.playbackItem.id)
@@ -105,6 +107,7 @@ struct VideoDetailView: View {
         .onDisappear {
             configurePlayer(for: nil)
             isTabBarHidden = false
+            AppOrientationController.lock(.portrait)
         }
     }
 

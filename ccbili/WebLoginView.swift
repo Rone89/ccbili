@@ -99,7 +99,12 @@ private struct WebLoginWebView: UIViewRepresentable {
         var request = URLRequest(url: url)
         request.setValue(AppConfig.defaultUserAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("https://www.bilibili.com", forHTTPHeaderField: "Referer")
-        webView.load(request)
+        Task {
+            await BilibiliCookieStore.seedWebCookieStore(configuration.websiteDataStore.httpCookieStore)
+            await MainActor.run {
+                webView.load(request)
+            }
+        }
 
         context.coordinator.webView = webView
         return webView
@@ -168,6 +173,7 @@ private struct WebLoginWebView: UIViewRepresentable {
             for cookie in cookies {
                 sharedStorage.setCookie(cookie)
             }
+            BilibiliCookieStore.persistAndShare(cookies: cookies)
         }
 
         private func checkLoginStatus() async {

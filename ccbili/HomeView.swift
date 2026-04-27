@@ -91,17 +91,6 @@ struct HomeView: View {
                         .font(.headline.weight(.semibold))
                         .opacity(compactBarOpacity)
                 }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        Task {
-                            await refreshHome()
-                        }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .accessibilityLabel("刷新推荐")
-                }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
             .safeAreaInset(edge: .top, spacing: 0) {
@@ -145,40 +134,75 @@ struct HomeView: View {
     private var titleSection: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .center) {
-                Text("首页")
-                    .font(.system(size: 44, weight: .bold, design: .default))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("推荐")
+                        .font(.system(size: 42, weight: .heavy, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+
+                    Text(formattedToday)
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary.opacity(0.82))
+                }
 
                 Spacer()
 
-                Button {
-                } label: {
-                    currentUserAvatarView
+                HStack(spacing: 14) {
+                    Button {
+                        NotificationCenter.default.post(name: .homeTabDidRetap, object: nil)
+                    } label: {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 58, height: 58)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .overlay {
+                                Circle().strokeBorder(.white.opacity(0.45), lineWidth: 1)
+                            }
+                    }
+                    .accessibilityLabel("回到顶部")
+
+                    Button {
+                    } label: {
+                        Text("选择")
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .padding(.horizontal, 24)
+                            .frame(height: 58)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .overlay {
+                                Capsule().strokeBorder(.white.opacity(0.45), lineWidth: 1)
+                            }
+                    }
+                    .accessibilityLabel("选择")
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("个人头像")
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("持续刷新你可能感兴趣的内容")
-                    .font(.subheadline)
+            HStack(spacing: 8) {
+                currentUserAvatarView
+
+                Text(authManager.isLoggedIn ? (authManager.username ?? "已登录") : "未登录")
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
 
-                HStack(spacing: 6) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
-
-                    Text("为你持续发现新内容")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
+                Text("为你持续发现新内容")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
             }
         }
         .padding(.top, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var formattedToday: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy年M月d日"
+        return formatter.string(from: Date())
     }
 
     private var currentUserAvatarView: some View {

@@ -9,7 +9,12 @@
 import SwiftUI
 
 struct HistoryView: View {
+    @Binding var isTabBarHidden: Bool
     @State private var viewModel = HistoryViewModel()
+
+    init(isTabBarHidden: Binding<Bool> = .constant(false)) {
+        _isTabBarHidden = isTabBarHidden
+    }
 
     var body: some View {
         List {
@@ -36,7 +41,7 @@ struct HistoryView: View {
                 } else {
                     ForEach(viewModel.items) { item in
                         NavigationLink {
-                            VideoDetailView(item: item)
+                            VideoDetailView(item: item, isTabBarHidden: $isTabBarHidden)
                         } label: {
                             VideoListRowView(
                                 title: item.title,

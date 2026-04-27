@@ -80,6 +80,7 @@ final class QRCodeLoginViewModel {
 
                     switch result.code {
                     case 0:
+                        BilibiliCookieStore.persistSharedStorage()
                         statusText = "登录成功"
                         isLoginCompleted = true
                         isPolling = false
