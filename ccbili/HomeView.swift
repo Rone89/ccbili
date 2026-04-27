@@ -72,10 +72,10 @@ struct HomeView: View {
             }
             .background(Color(.systemGroupedBackground))
             .scrollContentBackground(.hidden)
-            .navigationTitle("")
+            .navigationTitle("推荐")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .navigationBar)
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .safeAreaInset(edge: .top, spacing: 0) {
                 topBarBackground
             }

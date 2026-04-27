@@ -515,6 +515,12 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
 
             fullscreenContainer.transform = rotationTransform(for: orientation)
             attachPlayerView(to: fullscreenContainer)
+            fullscreenContainer.alpha = 0
+            fullscreenContainer.transform = fullscreenContainer.transform.scaledBy(x: 0.96, y: 0.96)
+            UIView.animate(withDuration: 0.28, delay: 0, options: [.curveEaseInOut, .allowUserInteraction]) {
+                self.fullscreenContainer.alpha = 1
+                self.fullscreenContainer.transform = self.rotationTransform(for: orientation)
+            }
         }
 
         private func exitFullscreen() {
@@ -524,8 +530,14 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
                 attachPlayerView(to: inlineView)
             }
 
-            fullscreenContainer.removeFromSuperview()
-            fullscreenWindow?.isHidden = true
+            let oldContainer = fullscreenContainer
+            let oldWindow = fullscreenWindow
+            UIView.animate(withDuration: 0.2, delay: 0, options: [.curveEaseInOut, .allowUserInteraction]) {
+                oldContainer.alpha = 0
+            } completion: { _ in
+                oldContainer.removeFromSuperview()
+                oldWindow?.isHidden = true
+            }
             fullscreenWindow = nil
         }
 
@@ -551,7 +563,7 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
             if let audioURL = source.audioURL {
                 let audioAsset = AVURLAsset(
                     url: audioURL,
-                    options: ["AVURLAssetHTTPHeaderFieldsKey": source.headers]
+                    options: ["AVURLAssetHTTPHeaderFieldsKey": audioHeaders(for: source)]
                 )
                 let audioItem = AVPlayerItem(asset: audioAsset)
                 audioPlayer = AVPlayer(playerItem: audioItem)
@@ -670,6 +682,18 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
             audioStatusObservation = nil
             audioPlayer?.pause()
             audioPlayer = nil
+        }
+
+        private func audioHeaders(for source: PlayableVideoSource) -> [String: String] {
+            var headers = source.headers
+            let cookies = HTTPCookieStorage.shared.cookies ?? []
+            let cookieHeader = HTTPCookie.requestHeaderFields(with: cookies)["Cookie"]
+            if let cookieHeader, !cookieHeader.isEmpty {
+                headers["Cookie"] = cookieHeader
+            }
+            headers["Accept"] = "*/*"
+            headers["Connection"] = "keep-alive"
+            return headers
         }
 
         fileprivate static func format(seconds: TimeInterval) -> String {
