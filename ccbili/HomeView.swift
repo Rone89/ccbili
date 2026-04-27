@@ -56,7 +56,7 @@ struct HomeView: View {
                     gridSection
                 }
                 .padding(.horizontal, 12)
-                .padding(.top, 12)
+                .padding(.top, 0)
                 .padding(.bottom, 20)
             }
             .coordinateSpace(name: "homeScroll")
@@ -74,13 +74,7 @@ struct HomeView: View {
             .scrollContentBackground(.hidden)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("推荐")
-                        .font(.headline.weight(.semibold))
-                        .opacity(compactBarOpacity)
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .toolbarBackground(.hidden, for: .navigationBar)
             .safeAreaInset(edge: .top, spacing: 0) {
                 topBarBackground
@@ -132,7 +126,7 @@ struct HomeView: View {
 
             currentUserAvatarView
         }
-        .padding(.top, 8)
+        .padding(.top, 0)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 

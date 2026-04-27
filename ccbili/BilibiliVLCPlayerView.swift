@@ -430,6 +430,7 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
         private var currentSource: PlayableVideoSource?
         private var audioPlayer: AVPlayer?
         private var audioTimeObserver: Any?
+        private var audioStatusObservation: NSKeyValueObservation?
         private weak var inlineView: UIView?
         private var fullscreenWindow: UIWindow?
         private let fullscreenContainer = UIView()
@@ -548,7 +549,21 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
             let options = makeOptions(for: source)
             player.set(url: source.url, options: options)
             if let audioURL = source.audioURL {
-                audioPlayer = AVPlayer(url: audioURL)
+                let audioAsset = AVURLAsset(
+                    url: audioURL,
+                    options: ["AVURLAssetHTTPHeaderFieldsKey": source.headers]
+                )
+                let audioItem = AVPlayerItem(asset: audioAsset)
+                audioPlayer = AVPlayer(playerItem: audioItem)
+                audioStatusObservation = audioItem.observe(\.status, options: [.new]) { [weak self] item, _ in
+                    guard item.status == .readyToPlay else { return }
+                    DispatchQueue.main.async {
+                        self?.syncAudioToVideo()
+                        if self?.player.state.isPlaying == true {
+                            self?.audioPlayer?.play()
+                        }
+                    }
+                }
             }
             player.play()
             audioPlayer?.play()
@@ -652,6 +667,7 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
                 audioPlayer?.removeTimeObserver(audioTimeObserver)
                 self.audioTimeObserver = nil
             }
+            audioStatusObservation = nil
             audioPlayer?.pause()
             audioPlayer = nil
         }
