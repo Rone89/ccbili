@@ -1,21 +1,25 @@
 ﻿import Foundation
 import AVFoundation
+import QuartzCore
 import libmpv
 
 final class MPVPlayerController {
     private var mpv: OpaquePointer?
+    private var isInitialized = false
 
     init() {
         mpv = mpv_create()
         guard let mpv else { return }
+        mpv_request_log_messages(mpv, "warn")
         setOption("vo", value: "avfoundation")
         setOption("keepaspect", value: "yes")
+        setOption("input-default-bindings", value: "no")
+        setOption("input-vo-keyboard", value: "no")
         setOption("hwdec", value: "videotoolbox")
         setOption("profile", value: "fast")
         setOption("cache", value: "yes")
         setOption("demuxer-max-bytes", value: "64MiB")
         setOption("demuxer-readahead-secs", value: "20")
-        mpv_initialize(mpv)
     }
 
     deinit {
@@ -25,15 +29,23 @@ final class MPVPlayerController {
         }
     }
 
+    func attach(to layer: CALayer) {
+        guard !isInitialized else { return }
+        var layerPointer = Int64(Int(bitPattern: Unmanaged.passUnretained(layer).toOpaque()))
+        setOption("wid", format: MPV_FORMAT_INT64, value: &layerPointer)
+        if let mpv, mpv_initialize(mpv) >= 0 {
+            isInitialized = true
+        }
+    }
+
     func play(source: PlayableVideoSource) {
-        guard let mpv else { return }
+        guard isInitialized else { return }
         configureHeaders(source.headers)
         command(["loadfile", source.url.absoluteString, "replace"])
         if let audioURL = source.audioURL {
             command(["audio-add", audioURL.absoluteString, "select"])
         }
         command(["set", "pause", "no"])
-        _ = mpv
     }
 
     func togglePlay() {
@@ -66,6 +78,11 @@ final class MPVPlayerController {
     private func setOption(_ name: String, value: String) {
         guard let mpv else { return }
         mpv_set_option_string(mpv, name, value)
+    }
+
+    private func setOption(_ name: String, format: mpv_format, value: UnsafeMutableRawPointer) {
+        guard let mpv else { return }
+        mpv_set_option(mpv, name, format, value)
     }
 
     private func command(_ args: [String]) {

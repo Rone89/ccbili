@@ -12,11 +12,13 @@ struct MPVPlayerView: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
         view.backgroundColor = .black
+        context.coordinator.attach(to: view)
         context.coordinator.play(source: source)
         return view
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.attach(to: uiView)
         context.coordinator.play(source: source)
     }
 
@@ -37,6 +39,10 @@ struct MPVPlayerView: UIViewRepresentable {
             self.commandCenter?.stopHandler = { [weak self] in
                 self?.stop()
             }
+        }
+
+        func attach(to view: UIView) {
+            player.attach(to: view.layer)
         }
 
         func play(source: PlayableVideoSource) {
