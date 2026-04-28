@@ -101,22 +101,13 @@ struct BilibiliVLCPlayerView: View {
     }
 
     private var videoSurface: some View {
-        Group {
-            if currentSource.isDASHSeparated {
-                MPVPlayerView(
-                    source: currentSource,
-                    commandCenter: commandCenter
-                )
-            } else {
-                BilibiliVLCVideoSurface(
-                    source: currentSource,
-                    playbackState: playbackState,
-                    commandCenter: commandCenter,
-                    isFullscreen: isFullscreenPresented,
-                    fullscreenOrientation: fullscreenOrientation
-                )
-            }
-        }
+        BilibiliVLCVideoSurface(
+            source: currentSource,
+            playbackState: playbackState,
+            commandCenter: commandCenter,
+            isFullscreen: isFullscreenPresented,
+            fullscreenOrientation: fullscreenOrientation
+        )
             .id(surfaceID)
             .background(.black)
     }
@@ -582,7 +573,11 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
             player.stop()
 
             let options = makeOptions(for: source)
-            player.set(url: source.url, options: options)
+            if let audioURL = source.audioURL {
+                player.set(urls: [source.url, audioURL], options: options)
+            } else {
+                player.set(url: source.url, options: options)
+            }
             player.play()
         }
 
@@ -666,6 +661,7 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
         private func makeOptions(for source: PlayableVideoSource) -> KSOptions {
             let options = KSOptions()
             options.isSeekedAutoPlay = true
+            options.hardwareDecode = false
             options.referer = source.headers["Referer"] ?? AppConfig.webBaseURL.absoluteString
             options.userAgent = source.headers["User-Agent"] ?? AppConfig.defaultUserAgent
             var headers = source.headers
