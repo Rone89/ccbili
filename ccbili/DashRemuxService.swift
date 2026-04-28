@@ -103,19 +103,20 @@ struct DashRemuxService {
             try FileManager.default.removeItem(at: temporaryOutputURL)
         }
 
-        let command = [
+        let arguments = [
+            "ffmpeg",
             "-y",
-            "-i", shellQuoted(videoFile.path),
-            "-i", shellQuoted(audioFile.path),
+            "-i", videoFile.path,
+            "-i", audioFile.path,
             "-map", "0:v:0",
             "-map", "1:a:0",
             "-c:v", "copy",
             "-c:a", "copy",
             "-shortest",
-            shellQuoted(temporaryOutputURL.path)
-        ].joined(separator: " ")
+            temporaryOutputURL.path
+        ]
 
-        try await runFFmpeg(command)
+        try await runFFmpeg(arguments)
         guard isPlayableFile(temporaryOutputURL) else {
             throw APIError.serverMessage("DASH FFmpeg 合流输出为空")
         }
@@ -126,23 +127,26 @@ struct DashRemuxService {
         return outputURL
     }
 
-    private func runFFmpeg(_ command: String) async throws {
+    private func runFFmpeg(_ arguments: [String]) async throws {
         try await withCheckedThrowingContinuation { continuation in
-            FFmpegKit.executeAsync(command) { session in
-                let returnCode = session?.getReturnCode()
-                if ReturnCode.isSuccess(returnCode) {
+            Task.detached(priority: .utility) {
+                var cStrings = arguments.map { strdup($0) }
+                defer {
+                    for pointer in cStrings {
+                        free(pointer)
+                    }
+                }
+
+                var argv = cStrings.map { UnsafeMutablePointer<CChar>?($0) }
+                let returnCode = ffmpeg_execute(Int32(argv.count), &argv)
+                if returnCode == 0 {
                     continuation.resume()
                     return
                 }
 
-                let logs = session?.getAllLogsAsString() ?? ""
-                continuation.resume(throwing: APIError.serverMessage("DASH FFmpeg 合流失败 \(returnCode?.description ?? "unknown") \(logs)"))
+                continuation.resume(throwing: APIError.serverMessage("DASH FFmpeg 合流失败 \(returnCode)"))
             }
         }
-    }
-
-    private func shellQuoted(_ path: String) -> String {
-        "'\(path.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 
     private func merge(videoFile: URL, audioFile: URL, outputURL: URL) async throws -> URL {
