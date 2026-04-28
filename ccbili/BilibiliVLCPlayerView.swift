@@ -32,6 +32,7 @@ struct BilibiliVLCPlayerView: View {
     @State private var pendingSeekPosition: Double?
     @State private var surfaceID = UUID()
     @State private var hlsDiagnosticsText = HLSPlaybackDiagnostics.shared.summary
+    @State private var didReceiveFirstProgress = false
     private let diagnosticsTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     init(
@@ -61,6 +62,9 @@ struct BilibiliVLCPlayerView: View {
         }
         .onReceive(playbackState.$position) { position in
             onPositionChange(position)
+            if position > 0 || playbackState.isPlaying {
+                didReceiveFirstProgress = true
+            }
         }
         .onChange(of: source) { _, newValue in
             currentSource = newValue
@@ -124,6 +128,9 @@ struct BilibiliVLCPlayerView: View {
         }
             .id(surfaceID)
             .background(.black)
+            .onChange(of: currentSource) { _, _ in
+                didReceiveFirstProgress = false
+            }
     }
 
     @ViewBuilder
@@ -138,6 +145,20 @@ struct BilibiliVLCPlayerView: View {
                 .tint(.white)
                 .padding(14)
                 .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+
+        if !didReceiveFirstProgress && !isSwitchingQuality {
+            VStack(spacing: 8) {
+                ProgressView()
+                    .tint(.white)
+                Text("正在加载视频")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.9))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .transition(.opacity)
         }
     }
 
@@ -300,10 +321,10 @@ struct BilibiliVLCPlayerView: View {
 
     private var fallbackQualities: [VideoQualityOption] {
         [
+            VideoQualityOption(quality: 112, description: "1080P+"),
             VideoQualityOption(quality: 32, description: "480P"),
             VideoQualityOption(quality: 64, description: "720P"),
-            VideoQualityOption(quality: 80, description: "1080P"),
-            VideoQualityOption(quality: 112, description: "1080P+"),
+            VideoQualityOption(quality: 80, description: "1080P")
         ]
     }
 
@@ -361,7 +382,8 @@ struct BilibiliVLCPlayerView: View {
 
     @MainActor
     private func switchQuality(to option: VideoQualityOption) async {
-        guard option.quality != currentSource.quality else {
+        if option.quality == currentSource.quality,
+           !(option.quality == 80 && currentSource.isDASHSeparated) {
             showControlsTemporarily()
             return
         }
@@ -381,6 +403,7 @@ struct BilibiliVLCPlayerView: View {
 
             currentSource = newSource
             playbackState.resetForNewMedia()
+            didReceiveFirstProgress = false
             surfaceID = UUID()
             pendingSeekPosition = previousPosition
             schedulePendingSeekIfNeeded()

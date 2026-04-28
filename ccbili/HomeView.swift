@@ -105,12 +105,14 @@ struct HomeView: View {
                     HomeRecommendationCardView(item: item)
                 }
                 .buttonStyle(PressedCardButtonStyle())
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 .task {
                     await viewModel.loadMoreIfNeeded(currentItem: item)
                     await viewModel.warmPlaybackSourceIfNeeded(for: item)
                 }
             }
         }
+        .animation(.easeInOut(duration: 0.28), value: viewModel.items)
     }
 
     private var currentUserAvatarView: some View {

@@ -126,6 +126,7 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
                         self.observe(item: item)
                         self.player.replaceCurrentItem(with: item)
                         self.addTimeObserver()
+                        self.updatePlaybackState()
                         self.playWhenReady(item: item)
                     }
                 } catch {
@@ -141,6 +142,7 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
                     self.player.automaticallyWaitsToMinimizeStalling = false
                     self.player.replaceCurrentItem(with: item)
                     self.addTimeObserver()
+                    self.updatePlaybackState()
                     self.playWhenReady(item: item)
                 }
             } catch {
@@ -278,7 +280,7 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
             }
 
             let item = AVPlayerItem(asset: composition)
-            item.preferredForwardBufferDuration = 4
+            item.preferredForwardBufferDuration = 1
             return item
         }
 

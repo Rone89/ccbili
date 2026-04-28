@@ -34,7 +34,7 @@ struct PlayableVideoSource: Equatable {
 }
 
 struct PlayURLService {
-    private let defaultPreferredQuality = 80
+    private let defaultPreferredQuality = 112
     private let qualityFallbackOrder = [112, 116, 80, 74, 64, 32, 16, 6]
 
     func fetchPlayableSource(
