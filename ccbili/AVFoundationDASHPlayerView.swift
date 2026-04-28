@@ -31,6 +31,7 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
     final class Coordinator {
         private let player = AVPlayer()
         private weak var playerLayer: AVPlayerLayer?
+        private weak var inlinePlayerLayer: AVPlayerLayer?
         private weak var playbackState: BilibiliVLCPlaybackState?
         private weak var commandCenter: BilibiliVLCCommandCenter?
         private var currentSource: PlayableVideoSource?
@@ -50,6 +51,7 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
         }
 
         func attach(to layer: AVPlayerLayer) {
+            inlinePlayerLayer = layer
             playerLayer = layer
             layer.videoGravity = .resizeAspect
             layer.player = player
@@ -127,6 +129,21 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
 
             commandCenter?.stopHandler = { [weak self] in
                 self?.stop()
+            }
+
+            commandCenter?.attachPlayerLayerHandler = { [weak self] layer in
+                guard let self else { return }
+                if let layer {
+                    self.playerLayer?.player = nil
+                    self.playerLayer = layer
+                    layer.videoGravity = .resizeAspect
+                    layer.player = self.player
+                } else if let inlinePlayerLayer = self.inlinePlayerLayer {
+                    self.playerLayer?.player = nil
+                    self.playerLayer = inlinePlayerLayer
+                    inlinePlayerLayer.videoGravity = .resizeAspect
+                    inlinePlayerLayer.player = self.player
+                }
             }
         }
 
