@@ -1,8 +1,9 @@
-﻿import AVFoundation
+import AVFoundation
+import AVKit
 import SwiftUI
 import UIKit
 
-struct AVFoundationDASHPlayerView: UIViewRepresentable {
+struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
     let source: PlayableVideoSource
     let playbackState: BilibiliVLCPlaybackState
     let commandCenter: BilibiliVLCCommandCenter
@@ -11,27 +12,33 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
         Coordinator(playbackState: playbackState, commandCenter: commandCenter)
     }
 
-    func makeUIView(context: Context) -> PlayerContainerView {
-        let view = PlayerContainerView()
-        view.backgroundColor = .black
-        context.coordinator.attach(to: view.playerLayer)
+    func makeUIViewController(context: Context) -> AVPlayerViewController {
+        let controller = AVPlayerViewController()
+        controller.player = context.coordinator.player
+        controller.showsPlaybackControls = true
+        controller.allowsPictureInPicturePlayback = true
+        controller.canStartPictureInPictureAutomaticallyFromInline = true
+        controller.entersFullScreenWhenPlaybackBegins = false
+        controller.exitsFullScreenWhenPlaybackEnds = true
+        controller.videoGravity = .resizeAspect
         context.coordinator.play(source: source)
-        return view
+        return controller
     }
 
-    func updateUIView(_ uiView: PlayerContainerView, context: Context) {
-        context.coordinator.attach(to: uiView.playerLayer)
+    func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
+        if controller.player !== context.coordinator.player {
+            controller.player = context.coordinator.player
+        }
+        controller.showsPlaybackControls = true
         context.coordinator.play(source: source)
     }
 
-    static func dismantleUIView(_ uiView: PlayerContainerView, coordinator: Coordinator) {
+    static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: Coordinator) {
         coordinator.stop()
     }
 
     final class Coordinator {
-        private let player = AVPlayer()
-        private weak var playerLayer: AVPlayerLayer?
-        private weak var inlinePlayerLayer: AVPlayerLayer?
+        let player = AVPlayer()
         private weak var playbackState: BilibiliVLCPlaybackState?
         private weak var commandCenter: BilibiliVLCCommandCenter?
         private var currentSource: PlayableVideoSource?
@@ -39,7 +46,6 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
         private var statusObserver: NSKeyValueObservation?
         private var timeObserver: Any?
         private var shouldAutoplay = true
-        private var isUsingExternalPlayerLayer = false
 
         init(playbackState: BilibiliVLCPlaybackState, commandCenter: BilibiliVLCCommandCenter) {
             self.playbackState = playbackState
@@ -49,14 +55,6 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
 
         deinit {
             removeTimeObserver()
-        }
-
-        func attach(to layer: AVPlayerLayer) {
-            inlinePlayerLayer = layer
-            guard !isUsingExternalPlayerLayer else { return }
-            playerLayer = layer
-            layer.videoGravity = .resizeAspect
-            layer.player = player
         }
 
         func play(source: PlayableVideoSource) {
@@ -133,22 +131,6 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
                 self?.stop()
             }
 
-            commandCenter?.attachPlayerLayerHandler = { [weak self] layer in
-                guard let self else { return }
-                if let layer {
-                    self.isUsingExternalPlayerLayer = true
-                    self.playerLayer?.player = nil
-                    self.playerLayer = layer
-                    layer.videoGravity = .resizeAspect
-                    layer.player = self.player
-                } else if let inlinePlayerLayer = self.inlinePlayerLayer {
-                    self.isUsingExternalPlayerLayer = false
-                    self.playerLayer?.player = nil
-                    self.playerLayer = inlinePlayerLayer
-                    inlinePlayerLayer.videoGravity = .resizeAspect
-                    inlinePlayerLayer.player = self.player
-                }
-            }
         }
 
         private func loadAndPlay(source: PlayableVideoSource) async {
@@ -335,16 +317,6 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
             enrichedHeaders["Accept"] = "*/*"
             enrichedHeaders["Connection"] = "keep-alive"
             return ["AVURLAssetHTTPHeaderFieldsKey": enrichedHeaders]
-        }
-    }
-
-    final class PlayerContainerView: UIView {
-        override class var layerClass: AnyClass {
-            AVPlayerLayer.self
-        }
-
-        var playerLayer: AVPlayerLayer {
-            layer as! AVPlayerLayer
         }
     }
 }

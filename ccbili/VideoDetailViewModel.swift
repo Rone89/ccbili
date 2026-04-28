@@ -129,7 +129,7 @@ final class VideoDetailViewModel {
 
             let related = try await relatedResponse
             if related.code == 0 {
-                relatedVideos = (related.data ?? []).compactMap { relatedItem in
+                relatedVideos = (related.data ?? []).prefix(5).compactMap { relatedItem in
                     guard let relatedBVID = relatedItem.bvid, !relatedBVID.isEmpty else {
                         return nil
                     }
