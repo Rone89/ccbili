@@ -76,6 +76,7 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
 
         private func loadAndPlay(source: PlayableVideoSource) async {
             guard let audioURL = source.audioURL else { return }
+            configureAudioSession()
 
             if (source.quality ?? 0) > 80 {
                 await playRemuxedFallback(source: source, audioURL: audioURL)
@@ -114,6 +115,16 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
                 }
             } catch {
                 print("DASH remux fallback failed: \(error.localizedDescription)")
+            }
+        }
+
+        private func configureAudioSession() {
+            do {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(.playback, mode: .moviePlayback, options: [])
+                try session.setActive(true)
+            } catch {
+                print("Failed to configure AVFoundation DASH audio session: \(error.localizedDescription)")
             }
         }
 

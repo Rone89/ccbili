@@ -1,4 +1,5 @@
 ﻿import AVFoundation
+import FFmpegKit
 import Foundation
 
 struct DashRemuxService {
@@ -11,7 +12,7 @@ struct DashRemuxService {
         quality: Int?
     ) async throws -> URL {
         let directory = try workingDirectory(bvid: bvid, cid: cid, quality: quality)
-        let outputURL = directory.appendingPathComponent("merged.mp4")
+        let outputURL = directory.appendingPathComponent("merged-v2.mp4")
         if isPlayableFile(outputURL) {
             return outputURL
         }
@@ -20,13 +21,18 @@ struct DashRemuxService {
         }
 
         let videoFile = directory.appendingPathComponent("video.mp4")
-        let audioFile = directory.appendingPathComponent("audio.m4a")
+        let audioFile = try sharedAudioFile(bvid: bvid, cid: cid)
 
         async let videoDownload: Void = downloadIfNeeded(from: videoURL, to: videoFile, headers: headers)
         async let audioDownload: Void = downloadIfNeeded(from: audioURL, to: audioFile, headers: headers)
         _ = try await (videoDownload, audioDownload)
 
-        return try await merge(videoFile: videoFile, audioFile: audioFile, outputURL: outputURL)
+        do {
+            return try await ffmpegMerge(videoFile: videoFile, audioFile: audioFile, outputURL: outputURL)
+        } catch {
+            print("FFmpeg DASH merge failed: \(error.localizedDescription)")
+            return try await merge(videoFile: videoFile, audioFile: audioFile, outputURL: outputURL)
+        }
     }
 
     private func workingDirectory(bvid: String, cid: Int, quality: Int?) throws -> URL {
@@ -37,6 +43,15 @@ struct DashRemuxService {
             .appendingPathComponent("\(bvid)-\(cid)-\(qualityValue)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
+    }
+
+    private func sharedAudioFile(bvid: String, cid: Int) throws -> URL {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let directory = caches
+            .appendingPathComponent("DashRemux", isDirectory: true)
+            .appendingPathComponent("\(bvid)-\(cid)-audio", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory.appendingPathComponent("audio.m4a")
     }
 
     private func downloadIfNeeded(from url: URL, to destination: URL, headers: [String: String]) async throws {
@@ -79,6 +94,55 @@ struct DashRemuxService {
         result["Accept"] = "*/*"
         result["Connection"] = "keep-alive"
         return result
+    }
+
+    private func ffmpegMerge(videoFile: URL, audioFile: URL, outputURL: URL) async throws -> URL {
+        let temporaryOutputURL = outputURL.deletingLastPathComponent()
+            .appendingPathComponent("merged-\(UUID().uuidString)-ffmpeg.mp4")
+        if FileManager.default.fileExists(atPath: temporaryOutputURL.path) {
+            try FileManager.default.removeItem(at: temporaryOutputURL)
+        }
+
+        let command = [
+            "-y",
+            "-i", shellQuoted(videoFile.path),
+            "-i", shellQuoted(audioFile.path),
+            "-map", "0:v:0",
+            "-map", "1:a:0",
+            "-c:v", "copy",
+            "-c:a", "copy",
+            "-shortest",
+            shellQuoted(temporaryOutputURL.path)
+        ].joined(separator: " ")
+
+        try await runFFmpeg(command)
+        guard isPlayableFile(temporaryOutputURL) else {
+            throw APIError.serverMessage("DASH FFmpeg 合流输出为空")
+        }
+        if FileManager.default.fileExists(atPath: outputURL.path) {
+            try FileManager.default.removeItem(at: outputURL)
+        }
+        try FileManager.default.moveItem(at: temporaryOutputURL, to: outputURL)
+        return outputURL
+    }
+
+    private func runFFmpeg(_ command: String) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            FFmpegKit.executeAsync(command) { session in
+                let returnCode = session?.getReturnCode()
+                if ReturnCode.isSuccess(returnCode) {
+                    continuation.resume()
+                    return
+                }
+
+                let logs = session?.getAllLogsAsString() ?? ""
+                continuation.resume(throwing: APIError.serverMessage("DASH FFmpeg 合流失败 \(returnCode?.description ?? "unknown") \(logs)"))
+            }
+        }
+    }
+
+    private func shellQuoted(_ path: String) -> String {
+        "'\(path.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 
     private func merge(videoFile: URL, audioFile: URL, outputURL: URL) async throws -> URL {
