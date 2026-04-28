@@ -408,10 +408,34 @@ struct PlayURLService {
                 return (lhs.id ?? 0) > (rhs.id ?? 0)
             }
 
+            let lhsCodecPriority = dashCodecPriority(lhs.codecs)
+            let rhsCodecPriority = dashCodecPriority(rhs.codecs)
+            if lhsCodecPriority != rhsCodecPriority {
+                return lhsCodecPriority < rhsCodecPriority
+            }
+
             return (lhs.bandwidth ?? 0) > (rhs.bandwidth ?? 0)
         }
 
         return sortedVideos.first(where: { streamURL(from: $0.baseURL, backups: $0.backupURL) != nil })
+    }
+
+    private func dashCodecPriority(_ codecs: String?) -> Int {
+        guard let codecs = codecs?.lowercased() else { return 9 }
+
+        if codecs.hasPrefix("avc1") {
+            return 0
+        }
+
+        if codecs.hasPrefix("hvc1") || codecs.hasPrefix("hev1") {
+            return 1
+        }
+
+        if codecs.hasPrefix("av01") {
+            return 2
+        }
+
+        return 8
     }
 
     private func qualityFallbackCandidates(for preferredQuality: Int) -> [Int] {
@@ -508,6 +532,12 @@ struct PlayURLService {
             .map(String.init)
             .joined(separator: ",")
         let selected = selectedVideo?.id.map(String.init) ?? data.quality.map(String.init) ?? "nil"
+        let selectedCodec = selectedVideo?.codecs ?? "nil"
+        let selectedQualityCodecs = (data.dash?.video ?? [])
+            .filter { $0.id == selectedVideo?.id }
+            .compactMap(\.codecs)
+            .uniqued()
+            .joined(separator: "/")
         let resolution = selectedVideo.map { video in
             "\(video.width ?? 0)x\(video.height ?? 0)@\(video.frameRate ?? "?")"
         } ?? "durl"
@@ -520,7 +550,7 @@ struct PlayURLService {
             cookie.contains("buvid4=") ? "b4" : "noB4"
         ].joined(separator: ",")
 
-        return "\(sourceType)/\(data.sourceAPI ?? "?") selected=\(selected) res=\(resolution) durl=\(durlCount) cookies=\(cookieFlags) accept=[\(accept)] dash=[\(dashQualities)]"
+        return "\(sourceType)/\(data.sourceAPI ?? "?") selected=\(selected) codec=\(selectedCodec) codecs=[\(selectedQualityCodecs)] res=\(resolution) durl=\(durlCount) cookies=\(cookieFlags) accept=[\(accept)] dash=[\(dashQualities)]"
     }
 
     private func qualityText(from data: PlayURLDataDTO) -> String? {

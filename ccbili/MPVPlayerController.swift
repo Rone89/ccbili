@@ -15,7 +15,7 @@ final class MPVPlayerController {
         setOption("keepaspect", value: "yes")
         setOption("input-default-bindings", value: "no")
         setOption("input-vo-keyboard", value: "no")
-        setOption("hwdec", value: "videotoolbox")
+        setOption("hwdec", value: "no")
         setOption("profile", value: "fast")
         setOption("cache", value: "yes")
         setOption("demuxer-max-bytes", value: "64MiB")
