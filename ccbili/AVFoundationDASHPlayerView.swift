@@ -83,7 +83,8 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
                     let item = try await DASHAssetLoader().createPlayerItem(
                         videoURL: source.url,
                         audioURL: audioURL,
-                        headers: source.headers
+                        headers: source.headers,
+                        fallbackDuration: source.duration
                     )
                     guard !Task.isCancelled else { return }
                     await MainActor.run {

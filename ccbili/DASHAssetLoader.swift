@@ -48,7 +48,8 @@ struct DASHAssetLoader {
     func createPlayerItem(
         videoURL: URL,
         audioURL: URL,
-        headers: [String: String]
+        headers: [String: String],
+        fallbackDuration: TimeInterval? = nil
     ) async throws -> AVPlayerItem {
         let assetOptions = Self.assetOptions(headers: headers)
         let videoAsset = AVURLAsset(url: videoURL, options: assetOptions)
@@ -56,7 +57,6 @@ struct DASHAssetLoader {
 
         async let videoTrackTask = firstTrack(from: videoAsset, mediaType: .video)
         async let audioTrackTask = firstTrack(from: audioAsset, mediaType: .audio)
-        async let durationTask = videoAsset.load(.duration)
 
         guard let videoTrack = try await videoTrackTask else {
             throw LoaderError.missingVideoTrack
@@ -64,7 +64,13 @@ struct DASHAssetLoader {
         guard let audioTrack = try await audioTrackTask else {
             throw LoaderError.missingAudioTrack
         }
-        let duration = try await durationTask
+        let videoTimeRange = try await videoTrack.load(.timeRange)
+        let audioTimeRange = try await audioTrack.load(.timeRange)
+        let duration = bestDuration(
+            videoTimeRange: videoTimeRange,
+            audioTimeRange: audioTimeRange,
+            fallbackDuration: fallbackDuration
+        )
         guard duration.isValid, duration.seconds.isFinite, duration > .zero else {
             throw LoaderError.missingDuration
         }
@@ -84,12 +90,13 @@ struct DASHAssetLoader {
         }
 
         do {
-            let videoRange = CMTimeRange(start: .zero, duration: duration)
+            let videoStart = videoTimeRange.start.isValid ? videoTimeRange.start : .zero
+            let videoRange = CMTimeRange(start: videoStart, duration: duration)
             try compositionVideoTrack.insertTimeRange(videoRange, of: videoTrack, at: .zero)
 
-            let audioTimeRange = try await audioTrack.load(.timeRange)
             let audioDuration = CMTimeMinimum(audioTimeRange.duration, duration)
-            let audioRange = CMTimeRange(start: audioTimeRange.start, duration: audioDuration)
+            let audioStart = audioTimeRange.start.isValid ? audioTimeRange.start : .zero
+            let audioRange = CMTimeRange(start: audioStart, duration: audioDuration)
             try compositionAudioTrack.insertTimeRange(audioRange, of: audioTrack, at: .zero)
         } catch {
             throw LoaderError.insertFailed(error.localizedDescription)
@@ -109,6 +116,28 @@ struct DASHAssetLoader {
         return tracks.first
     }
 
+    private func bestDuration(
+        videoTimeRange: CMTimeRange,
+        audioTimeRange: CMTimeRange,
+        fallbackDuration: TimeInterval?
+    ) -> CMTime {
+        let videoDuration = videoTimeRange.duration
+        if videoDuration.isUsableDuration {
+            return videoDuration
+        }
+
+        let audioDuration = audioTimeRange.duration
+        if audioDuration.isUsableDuration {
+            return audioDuration
+        }
+
+        if let fallbackDuration, fallbackDuration.isFinite, fallbackDuration > 0 {
+            return CMTime(seconds: fallbackDuration, preferredTimescale: 600)
+        }
+
+        return .invalid
+    }
+
     private static func assetOptions(headers: [String: String]) -> [String: Any] {
         var injectedHeaders = headers
         let cookies = HTTPCookieStorage.shared.cookies ?? []
@@ -118,5 +147,11 @@ struct DASHAssetLoader {
         injectedHeaders["Accept"] = "*/*"
         injectedHeaders["Connection"] = "keep-alive"
         return ["AVURLAssetHTTPHeaderFieldsKey": injectedHeaders]
+    }
+}
+
+private extension CMTime {
+    var isUsableDuration: Bool {
+        isValid && !isIndefinite && seconds.isFinite && self > .zero
     }
 }
