@@ -37,7 +37,8 @@ struct PlayURLService {
         var headers = [
             "Referer": referer,
             "Origin": AppConfig.webBaseURL.absoluteString,
-            "User-Agent": AppConfig.desktopUserAgent
+            "User-Agent": AppConfig.dartUserAgent,
+            "Accept-Encoding": "br,gzip"
         ]
         if let cookieHeader = BilibiliCookieStore.cookieHeader() {
             headers["Cookie"] = cookieHeader
@@ -126,7 +127,7 @@ struct PlayURLService {
                 quality: selectedQuality,
                 qualityDescription: selectedQuality.map(qualityText(for:)) ?? qualityText(from: data),
                 availableQualities: qualityOptions(from: data),
-                debugDescription: playURLDebugDescription(data: data, selectedVideo: video, sourceType: "DASH"),
+                debugDescription: playURLDebugDescription(data: data, selectedVideo: video, sourceType: "DASH", headers: headers),
                 bvid: bvid,
                 cid: cid
             )
@@ -144,7 +145,7 @@ struct PlayURLService {
             quality: selectedQuality,
             qualityDescription: selectedQuality.map(qualityText(for:)) ?? qualityText(from: data),
             availableQualities: qualityOptions(from: data),
-            debugDescription: playURLDebugDescription(data: data, selectedVideo: video, sourceType: "DASH-NoAudio"),
+            debugDescription: playURLDebugDescription(data: data, selectedVideo: video, sourceType: "DASH-NoAudio", headers: headers),
             bvid: bvid,
             cid: cid
         )
@@ -174,7 +175,7 @@ struct PlayURLService {
                 quality: data.quality,
                 qualityDescription: qualityText(from: data),
                 availableQualities: qualityOptions(from: data),
-                debugDescription: playURLDebugDescription(data: data, selectedVideo: nil, sourceType: "DURL"),
+                debugDescription: playURLDebugDescription(data: data, selectedVideo: nil, sourceType: "DURL", headers: headers),
                 bvid: bvid,
                 cid: cid
             )
@@ -474,7 +475,8 @@ struct PlayURLService {
     private func playURLDebugDescription(
         data: PlayURLDataDTO,
         selectedVideo: PlayURLDashVideoDTO?,
-        sourceType: String
+        sourceType: String,
+        headers: [String: String]
     ) -> String {
         let accept = (data.acceptQuality ?? [])
             .map(String.init)
@@ -490,7 +492,14 @@ struct PlayURLService {
         } ?? "durl"
         let durlCount = data.durl?.count ?? 0
 
-        return "\(sourceType)/\(data.sourceAPI ?? "?") selected=\(selected) res=\(resolution) durl=\(durlCount) accept=[\(accept)] dash=[\(dashQualities)]"
+        let cookie = headers["Cookie"] ?? ""
+        let cookieFlags = [
+            cookie.contains("SESSDATA=") ? "sess" : "noSess",
+            cookie.contains("buvid3=") ? "b3" : "noB3",
+            cookie.contains("buvid4=") ? "b4" : "noB4"
+        ].joined(separator: ",")
+
+        return "\(sourceType)/\(data.sourceAPI ?? "?") selected=\(selected) res=\(resolution) durl=\(durlCount) cookies=\(cookieFlags) accept=[\(accept)] dash=[\(dashQualities)]"
     }
 
     private func qualityText(from data: PlayURLDataDTO) -> String? {
