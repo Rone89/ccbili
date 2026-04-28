@@ -23,7 +23,6 @@ struct VideoDetailView: View {
     @State private var commentSortMode: CommentSortMode = .hot
     @State private var playerScrollOffset: CGFloat = 0
     @State private var isVideoPlaying = false
-    @State private var isVideoFullscreen = false
 
     private let biliPink = Color(red: 251 / 255, green: 114 / 255, blue: 153 / 255)
     private let replyService = ReplyService()
@@ -40,10 +39,7 @@ struct VideoDetailView: View {
         GeometryReader { proxy in
             let contentWidth = max(proxy.size.width - pageHorizontalInset * 2, 0)
             let playerHeight = contentWidth * 9 / 16
-            let displayedPlayerWidth = isVideoFullscreen ? proxy.size.width : contentWidth
-            let displayedPlayerHeight = isVideoFullscreen ? proxy.size.height : playerHeight
-            let playerOffsetX = isVideoFullscreen ? 0 : pageHorizontalInset
-            let playerOffsetY = isVideoFullscreen ? 0 : (isVideoPlaying ? 0 : playerScrollOffset)
+            let playerOffsetY = isVideoPlaying ? 0 : playerScrollOffset
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
@@ -87,36 +83,21 @@ struct VideoDetailView: View {
             }
             .background(Color(.systemGroupedBackground))
             .overlay(alignment: .topLeading) {
-                if isVideoFullscreen {
-                    Color.black
-                        .ignoresSafeArea()
-                        .zIndex(9)
-                }
-
-                playerCardSection(height: displayedPlayerHeight)
-                    .frame(width: displayedPlayerWidth, height: displayedPlayerHeight)
-                    .clipShape(RoundedRectangle(cornerRadius: isVideoFullscreen ? 0 : detailCardCornerRadius, style: .continuous))
-                    .shadow(color: .black.opacity(isVideoPlaying && !isVideoFullscreen ? 0.16 : 0), radius: 16, x: 0, y: 8)
-                    .offset(x: playerOffsetX, y: playerOffsetY)
+                playerCardSection(height: playerHeight)
+                    .frame(width: contentWidth, height: playerHeight)
+                    .clipShape(RoundedRectangle(cornerRadius: detailCardCornerRadius, style: .continuous))
+                    .shadow(color: .black.opacity(isVideoPlaying ? 0.16 : 0), radius: 16, x: 0, y: 8)
+                    .offset(x: pageHorizontalInset, y: playerOffsetY)
                     .zIndex(10)
             }
             .animation(.spring(response: 0.32, dampingFraction: 0.88), value: isVideoPlaying)
-            .animation(.easeInOut(duration: 0.25), value: isVideoFullscreen)
         }
-        .statusBarHidden(isVideoFullscreen)
         .navigationTitle("视频详情")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .onAppear {
             UIDevice.current.beginGeneratingDeviceOrientationNotifications()
             AppOrientationController.lock(.portrait)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
-            let orientation = UIDevice.current.orientation
-            if orientation == .landscapeLeft || orientation == .landscapeRight {
-                isVideoFullscreen = true
-            } else if orientation == .portrait || orientation == .portraitUpsideDown {
-                isVideoFullscreen = false
-            }
         }
         .task {
             favoriteViewModel.load(videoID: viewModel.playbackItem.id)
@@ -145,7 +126,6 @@ struct VideoDetailView: View {
             }
         }
         .onDisappear {
-            isVideoFullscreen = false
             configurePlayer(for: nil)
             AppOrientationController.lock(.portrait)
         }
@@ -188,9 +168,6 @@ struct VideoDetailView: View {
                 },
                 onPlaybackStateChange: { isPlaying in
                     isVideoPlaying = isPlaying
-                },
-                onFullscreenRequest: {
-                    toggleVideoFullscreen()
                 }
             )
                 .frame(maxWidth: .infinity)
@@ -992,12 +969,6 @@ struct VideoDetailView: View {
         }
     }
 
-    private func toggleVideoFullscreen() {
-        let shouldEnterFullscreen = !isVideoFullscreen
-        withAnimation(.easeInOut(duration: 0.25)) {
-            isVideoFullscreen = shouldEnterFullscreen
-        }
-    }
 }
 
 private enum DetailTab: Hashable {

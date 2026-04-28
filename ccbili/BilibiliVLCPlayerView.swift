@@ -264,7 +264,7 @@ struct BilibiliVLCPlayerView: View {
 
             qualityMenu
 
-            if let onFullscreenRequest {
+            if !currentSource.isDASHSeparated, let onFullscreenRequest {
                 Button {
                     onFullscreenRequest()
                     showControlsTemporarily()

@@ -20,7 +20,7 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
         controller.canStartPictureInPictureAutomaticallyFromInline = true
         controller.entersFullScreenWhenPlaybackBegins = false
         controller.exitsFullScreenWhenPlaybackEnds = true
-        controller.videoGravity = .resizeAspect
+        controller.videoGravity = .resizeAspectFill
         context.coordinator.play(source: source)
         return controller
     }
@@ -30,6 +30,7 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
             controller.player = context.coordinator.player
         }
         controller.showsPlaybackControls = true
+        controller.videoGravity = .resizeAspectFill
         context.coordinator.play(source: source)
     }
 
