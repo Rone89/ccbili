@@ -21,7 +21,7 @@ final class VideoDetailViewModel {
     var playbackSource: PlayableVideoSource?
 
     private let replyService = ReplyService()
-    private let playURLService = PlayURLService()
+    private let playURLCache = PlayURLCache.shared
 
     init(item: VideoItem) {
         self.item = item
@@ -62,7 +62,6 @@ final class VideoDetailViewModel {
             )
 
             let detail = try await detailResponse
-            let related = try await relatedResponse
 
             guard detail.code == 0 else {
                 throw APIError.serverMessage(detail.message)
@@ -128,6 +127,7 @@ final class VideoDetailViewModel {
                 ]
             }
 
+            let related = try await relatedResponse
             if related.code == 0 {
                 relatedVideos = (related.data ?? []).compactMap { relatedItem in
                     guard let relatedBVID = relatedItem.bvid, !relatedBVID.isEmpty else {
@@ -167,9 +167,9 @@ final class VideoDetailViewModel {
         isLoadingPlaybackSource = true
         playbackErrorMessage = nil
 
-        Task { [playURLService] in
+        Task { [playURLCache] in
             do {
-                let source = try await playURLService.fetchPlayableSource(
+                let source = try await playURLCache.source(
                     bvid: resolvedBVID,
                     cid: resolvedCID
                 )

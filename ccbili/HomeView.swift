@@ -107,6 +107,7 @@ struct HomeView: View {
                 .buttonStyle(PressedCardButtonStyle())
                 .task {
                     await viewModel.loadMoreIfNeeded(currentItem: item)
+                    await viewModel.warmPlaybackSourceIfNeeded(for: item)
                 }
             }
         }

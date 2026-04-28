@@ -2,6 +2,8 @@
 
 struct DashHLSManifestService {
     func makeManifest(for source: PlayableVideoSource) async throws -> URL {
+        LocalHLSProxyServer.shared.resetForForegroundPlayback()
+
         guard let audioURL = source.audioURL,
               let videoInitRange = byteRange(from: source.videoInitRange),
               let videoIndexRange = byteRange(from: source.videoIndexRange),

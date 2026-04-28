@@ -17,6 +17,13 @@ final class LocalHLSProxyServer {
 
     private init() {}
 
+    func resetForForegroundPlayback() {
+        listener?.cancel()
+        listener = nil
+        listenerState = .setup
+        readyContinuations.removeAll()
+    }
+
     func register(mediaURL: URL, headers: [String: String]) throws -> URL {
         try startIfNeeded()
         routeCounter += 1
@@ -53,7 +60,11 @@ final class LocalHLSProxyServer {
     private func startIfNeeded() throws {
         if listener != nil, case .ready = listenerState { return }
         if listener != nil, case .setup = listenerState { return }
-        if listener != nil, case .waiting = listenerState { return }
+        if listener != nil, case .waiting = listenerState {
+            listener?.cancel()
+            listener = nil
+            listenerState = .setup
+        }
         listener?.cancel()
         listener = nil
         listenerState = .setup

@@ -77,6 +77,15 @@ final class HomeViewModel {
         item.id.hasPrefix(Self.placeholderPrefix)
     }
 
+    func warmPlaybackSourceIfNeeded(for item: VideoItem) async {
+        guard !isPlaceholderItem(item),
+              let bvid = item.resolvedBVID,
+              let cid = item.cid else {
+            return
+        }
+        await PlayURLCache.shared.warm(bvid: bvid, cid: cid)
+    }
+
     private func fetchRecommendations() async throws -> [VideoItem] {
         var components = URLComponents(
             url: AppConfig.apiBaseURL.appending(path: "/x/web-interface/wbi/index/top/feed/rcmd"),
