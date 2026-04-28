@@ -43,7 +43,7 @@ struct VideoDetailView: View {
             let displayedPlayerWidth = isVideoFullscreen ? proxy.size.width : contentWidth
             let displayedPlayerHeight = isVideoFullscreen ? proxy.size.height : playerHeight
             let playerOffsetX = isVideoFullscreen ? 0 : pageHorizontalInset
-            let playerOffsetY = isVideoFullscreen ? 0 : (isVideoPlaying ? proxy.safeAreaInsets.top : playerScrollOffset)
+            let playerOffsetY = isVideoFullscreen ? 0 : (isVideoPlaying ? 0 : playerScrollOffset)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
@@ -108,7 +108,7 @@ struct VideoDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             UIDevice.current.beginGeneratingDeviceOrientationNotifications()
-            AppOrientationController.lock(.allButUpsideDown)
+            AppOrientationController.lock(.portrait)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
             let orientation = UIDevice.current.orientation
@@ -1011,7 +1011,6 @@ private struct PlayerOffsetPreferenceKey: PreferenceKey {
         withAnimation(.easeInOut(duration: 0.25)) {
             isVideoFullscreen = shouldEnterFullscreen
         }
-        AppOrientationController.lock(shouldEnterFullscreen ? .landscape : .portrait)
     }
 }
 

@@ -102,7 +102,7 @@ struct BilibiliVLCPlayerView: View {
                 didReceiveFirstProgress = true
             }
         }
-        .onReceive(playbackState.$isPlaying.removeDuplicates()) { isPlaying in
+        .onReceive(playbackState.$isPlaying) { isPlaying in
             onPlaybackStateChange(isPlaying)
         }
         .onChange(of: source) { _, newValue in
