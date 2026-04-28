@@ -37,6 +37,7 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
         private var loadTask: Task<Void, Never>?
         private var statusObserver: NSKeyValueObservation?
         private var timeObserver: Any?
+        private var shouldAutoplay = true
 
         init(playbackState: BilibiliVLCPlaybackState, commandCenter: BilibiliVLCCommandCenter) {
             self.playbackState = playbackState
@@ -57,6 +58,7 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
         func play(source: PlayableVideoSource) {
             guard source != currentSource else { return }
             currentSource = source
+            shouldAutoplay = true
             loadTask?.cancel()
             statusObserver?.invalidate()
             statusObserver = nil
@@ -85,7 +87,9 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
                 guard let self else { return }
                 if self.player.timeControlStatus == .playing {
                     self.player.pause()
+                    self.shouldAutoplay = false
                 } else {
+                    self.shouldAutoplay = true
                     self.player.play()
                 }
                 self.updatePlaybackState()
@@ -122,7 +126,7 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
                         self.observe(item: item)
                         self.player.replaceCurrentItem(with: item)
                         self.addTimeObserver()
-                        self.player.play()
+                        self.playWhenReady(item: item)
                     }
                 } catch {
                     print("DASH to HLS load failed: \(error.localizedDescription)")
@@ -137,7 +141,7 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
                     self.player.automaticallyWaitsToMinimizeStalling = false
                     self.player.replaceCurrentItem(with: item)
                     self.addTimeObserver()
-                    self.player.play()
+                    self.playWhenReady(item: item)
                 }
             } catch {
                 print("AVFoundation DASH load failed: \(error.localizedDescription)")
@@ -150,6 +154,9 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
                 switch item.status {
                 case .readyToPlay:
                     HLSPlaybackDiagnostics.shared.recordPlayerStatus("ready")
+                    if self.shouldAutoplay {
+                        self.player.play()
+                    }
                     self.updatePlaybackState()
                 case .failed:
                     HLSPlaybackDiagnostics.shared.recordPlayerStatus("failed:\(item.error?.localizedDescription ?? "unknown")")
@@ -157,6 +164,18 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
                     HLSPlaybackDiagnostics.shared.recordPlayerStatus("unknown")
                 @unknown default:
                     HLSPlaybackDiagnostics.shared.recordPlayerStatus("other")
+                }
+            }
+        }
+
+        private func playWhenReady(item: AVPlayerItem) {
+            shouldAutoplay = true
+            player.play()
+            if item.status != .readyToPlay {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self, weak item] in
+                    guard let self, self.shouldAutoplay, item === self.player.currentItem else { return }
+                    self.player.play()
+                    self.updatePlaybackState()
                 }
             }
         }

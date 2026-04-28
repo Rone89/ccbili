@@ -140,10 +140,14 @@ struct RemoteImageView<Placeholder: View, FailureView: View>: View {
     }
 
     private func imageCandidateURLs(from url: URL) -> [URL] {
-        var candidates = [url]
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
-            return candidates
+            return [url]
         }
+        if components.scheme == "http" {
+            components.scheme = "https"
+        }
+
+        var candidates = components.url.map { [$0] } ?? [url]
 
         let originalPath = components.path
         let strippedPath = originalPath.split(separator: "@", maxSplits: 1).first.map(String.init) ?? originalPath

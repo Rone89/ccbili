@@ -133,6 +133,8 @@ final class HomeViewModel {
 
         if path.hasPrefix("//") {
             path = "https:" + path
+        } else if path.hasPrefix("http://") {
+            path = "https://" + path.dropFirst("http://".count)
         }
 
         guard var components = URLComponents(string: path) else {
