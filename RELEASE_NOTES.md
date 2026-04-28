@@ -1,12 +1,11 @@
 ﻿## 本版本修复
 
-- 新增 `DASHAssetLoader`：基于 `AVMutableComposition` 将远程 Video Track 与 Audio Track 合成为一个 `AVPlayerItem`。
-- 1080P+/1080P60/4K 优先走 `DASH-AVComposition` 路径，符合 JKVideo 的核心思路：先识别 DASH 音画分离，再交给播放器统一播放。
-- `DASHAssetLoader.createPlayerItem(videoURL:audioURL:headers:)` 会异步加载 video/audio tracks，确保 tracks 就绪后再插入 composition。
-- 注入 Referer/User-Agent/Cookie/Accept 等请求头到两个 `AVURLAsset`，降低 B 站 CDN 403 风险。
-- 合成时保留原视频 `preferredTransform` 和 `naturalSize`，避免方向错误。
-- 如果 AVComposition 合成失败，仍保留本地合流兜底，避免高画质完全不可播。
+- 按要求移除 KSPlayer、FFmpegKit、libmpv 等第三方播放/解码依赖，播放层统一收敛为原生 AVPlayer。
+- 普通单 URL 视频改为 `AVURLAsset + AVPlayerItem + AVPlayerLayer` 播放，并注入 Referer/User-Agent/Cookie 等请求头。
+- 1080P+/1080P60/4K DASH 音画分离视频继续使用 `DASHAssetLoader + AVMutableComposition` 合成远程视频轨和音频轨后交给 AVPlayer。
+- 移除之前实验性的 DASH→HLS、本地 HTTP 代理、mpv 流式和 FFmpeg 合流代码，降低包体和复杂度。
+- 诊断文本仍显示 `DASH-AVComposition`，用于确认高画质跑的是原生 AVComposition 路径。
 
-## 原理说明
+## 说明
 
-Bilibili 1080P+ 通常是 DASH 音画分离：视频 URL 只有画面，音频 URL 只有声音。单 URL AVPlayer 无法自动合并两条远程流，所以会出现有画无声或解析失败。本版本通过 `AVMutableComposition` 把远程视频轨和音频轨合成一个逻辑媒体项，再交给 AVPlayer 播放。
+这个版本是纯原生 AVPlayer 版本：单流直接播放，音画分离 DASH 通过 AVMutableComposition 合成后播放。

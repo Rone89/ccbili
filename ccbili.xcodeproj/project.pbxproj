@@ -7,9 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		7F73EBD12F9F0001005BA0C2 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 7F73EBD02F9F0000005BA0C2 /* KSPlayer */; };
-		7F73EBD32F9F1001005BA0C2 /* FFmpegKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7F73EBD22F9F1001005BA0C2 /* FFmpegKit */; };
-		7F73EBD52F9F2001005BA0C2 /* libmpv in Frameworks */ = {isa = PBXBuildFile; productRef = 7F73EBD42F9F2001005BA0C2 /* libmpv */; };
 /* End PBXBuildFile section */
 /* Begin PBXCopyFilesBuildPhase section */
 		7F73EBC42F9E7455005BA0C2 /* Embed Frameworks */ = {
@@ -54,9 +51,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7F73EBD32F9F1001005BA0C2 /* FFmpegKit in Frameworks */,
-				7F73EBD52F9F2001005BA0C2 /* libmpv in Frameworks */,
-				7F73EBD12F9F0001005BA0C2 /* KSPlayer in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -99,9 +93,6 @@
 			);
 			name = ccbili;
 			packageProductDependencies = (
-				7F73EBD22F9F1001005BA0C2 /* FFmpegKit */,
-				7F73EBD42F9F2001005BA0C2 /* libmpv */,
-				7F73EBD02F9F0000005BA0C2 /* KSPlayer */,
 			);
 			productName = ccbili;
 			productReference = 7F73EB2F2F9CDB7E005BA0C2 /* ccbili.app */;
@@ -132,8 +123,6 @@
 			mainGroup = 7F73EB262F9CDB7E005BA0C2;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				7F73EBD12F9F1001005BA0C2 /* XCRemoteSwiftPackageReference "FFmpegKit" */,
-				7F73EBCF2F9F0000005BA0C2 /* XCRemoteSwiftPackageReference "KSPlayer" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 7F73EB302F9CDB7E005BA0C2 /* Products */;
@@ -166,40 +155,9 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		7F73EBD02F9F0000005BA0C2 /* KSPlayer */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 7F73EBCF2F9F0000005BA0C2 /* XCRemoteSwiftPackageReference "KSPlayer" */;
-			productName = KSPlayer;
-		};
-		7F73EBD22F9F1001005BA0C2 /* FFmpegKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 7F73EBD12F9F1001005BA0C2 /* XCRemoteSwiftPackageReference "FFmpegKit" */;
-			productName = FFmpegKit;
-		};
-		7F73EBD42F9F2001005BA0C2 /* libmpv */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 7F73EBD12F9F1001005BA0C2 /* XCRemoteSwiftPackageReference "FFmpegKit" */;
-			productName = libmpv;
-		};
 /* End XCSwiftPackageProductDependency section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		7F73EBD12F9F1001005BA0C2 /* XCRemoteSwiftPackageReference "FFmpegKit" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/kingslay/FFmpegKit.git";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
-		7F73EBCF2F9F0000005BA0C2 /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/kingslay/KSPlayer.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.3.4;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 /* Begin XCBuildConfiguration section */
 		7F73EB382F9CDB7E005BA0C2 /* Debug */ = {

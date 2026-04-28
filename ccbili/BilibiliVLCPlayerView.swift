@@ -10,7 +10,6 @@ import UIKit
 import AVFoundation
 import Combine
 
-import KSPlayer
 
 
 struct BilibiliVLCPlayerView: View {
@@ -425,203 +424,88 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
     let fullscreenOrientation: UIDeviceOrientation
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(
-            playbackState: playbackState,
-            commandCenter: commandCenter
-        )
+        Coordinator(playbackState: playbackState, commandCenter: commandCenter)
     }
 
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
+    func makeUIView(context: Context) -> AVPlayerContainerView {
+        let view = AVPlayerContainerView()
         view.backgroundColor = .black
-        context.coordinator.attach(to: view)
+        context.coordinator.attach(to: view.playerLayer)
         context.coordinator.play(source: source)
         return view
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
-        context.coordinator.attach(to: uiView)
+    func updateUIView(_ uiView: AVPlayerContainerView, context: Context) {
+        context.coordinator.attach(to: uiView.playerLayer)
         context.coordinator.play(source: source)
-        context.coordinator.setFullscreen(isFullscreen, orientation: fullscreenOrientation)
     }
 
-    static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
+    static func dismantleUIView(_ uiView: AVPlayerContainerView, coordinator: Coordinator) {
         coordinator.stop()
     }
 
-    final class Coordinator: NSObject {
-        private let player = KSPlayerLayer(
-            url: URL(fileURLWithPath: "/dev/null"),
-            isAutoPlay: false,
-            options: KSOptions()
-        )
+    final class Coordinator {
+        private let player = AVPlayer()
+        private weak var playerLayer: AVPlayerLayer?
         private weak var playbackState: BilibiliVLCPlaybackState?
         private weak var commandCenter: BilibiliVLCCommandCenter?
         private var currentSource: PlayableVideoSource?
-        private weak var inlineView: UIView?
-        private var fullscreenWindow: UIWindow?
-        private let fullscreenContainer = UIView()
-        private var isFullscreen = false
+        private var timeObserver: Any?
 
-        init(
-            playbackState: BilibiliVLCPlaybackState,
-            commandCenter: BilibiliVLCCommandCenter
-        ) {
+        init(playbackState: BilibiliVLCPlaybackState, commandCenter: BilibiliVLCCommandCenter) {
             self.playbackState = playbackState
             self.commandCenter = commandCenter
-            super.init()
-            player.delegate = self
             bindCommands()
         }
 
-        func attach(to view: UIView) {
-            inlineView = view
-            guard !isFullscreen else { return }
-
-            guard player.player.view?.superview !== view else {
-                return
-            }
-
-            attachPlayerView(to: view)
+        deinit {
+            removeTimeObserver()
         }
 
-        func setFullscreen(_ fullscreen: Bool, orientation: UIDeviceOrientation) {
-            guard isFullscreen != fullscreen || fullscreen else { return }
-
-            if fullscreen {
-                enterFullscreen(orientation: orientation)
-            } else {
-                exitFullscreen()
-            }
-        }
-
-        private func attachPlayerView(to view: UIView) {
-            player.player.view?.removeFromSuperview()
-
-            guard let playerView = player.player.view else {
-                return
-            }
-
-            view.addSubview(playerView)
-            playerView.translatesAutoresizingMaskIntoConstraints = false
-            NSLayoutConstraint.activate([
-                playerView.topAnchor.constraint(equalTo: view.topAnchor),
-                playerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-                playerView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-                playerView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-            ])
-        }
-
-        private func enterFullscreen(orientation: UIDeviceOrientation) {
-            guard fullscreenWindow == nil else { return }
-            guard let windowScene = inlineView?.window?.windowScene ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else {
-                return
-            }
-
-            isFullscreen = true
-
-            let window = UIWindow(windowScene: windowScene)
-            window.windowLevel = .statusBar + 1
-            window.backgroundColor = .black
-
-            let controller = UIViewController()
-            controller.view.backgroundColor = .black
-            window.rootViewController = controller
-            window.isHidden = false
-            fullscreenWindow = window
-
-            fullscreenContainer.backgroundColor = .black
-            controller.view.addSubview(fullscreenContainer)
-            fullscreenContainer.translatesAutoresizingMaskIntoConstraints = false
-            NSLayoutConstraint.activate([
-                fullscreenContainer.centerXAnchor.constraint(equalTo: controller.view.centerXAnchor),
-                fullscreenContainer.centerYAnchor.constraint(equalTo: controller.view.centerYAnchor),
-                fullscreenContainer.widthAnchor.constraint(equalTo: controller.view.heightAnchor),
-                fullscreenContainer.heightAnchor.constraint(equalTo: controller.view.widthAnchor)
-            ])
-
-            fullscreenContainer.transform = rotationTransform(for: orientation)
-            attachPlayerView(to: fullscreenContainer)
-            fullscreenContainer.alpha = 0
-            fullscreenContainer.transform = fullscreenContainer.transform.scaledBy(x: 0.96, y: 0.96)
-            UIView.animate(withDuration: 0.28, delay: 0, options: [.curveEaseInOut, .allowUserInteraction]) {
-                self.fullscreenContainer.alpha = 1
-                self.fullscreenContainer.transform = self.rotationTransform(for: orientation)
-            }
-        }
-
-        private func exitFullscreen() {
-            isFullscreen = false
-
-            if let inlineView {
-                attachPlayerView(to: inlineView)
-            }
-
-            let oldContainer = fullscreenContainer
-            let oldWindow = fullscreenWindow
-            UIView.animate(withDuration: 0.2, delay: 0, options: [.curveEaseInOut, .allowUserInteraction]) {
-                oldContainer.alpha = 0
-            } completion: { _ in
-                oldContainer.removeFromSuperview()
-                oldWindow?.isHidden = true
-            }
-            fullscreenWindow = nil
-        }
-
-        private func rotationTransform(for orientation: UIDeviceOrientation) -> CGAffineTransform {
-            orientation == .landscapeLeft
-                ? CGAffineTransform(rotationAngle: .pi / 2)
-                : CGAffineTransform(rotationAngle: -.pi / 2)
+        func attach(to layer: AVPlayerLayer) {
+            playerLayer = layer
+            layer.videoGravity = .resizeAspect
+            layer.player = player
         }
 
         func play(source: PlayableVideoSource) {
-            guard currentSource != source else {
-                return
-            }
-
+            guard source != currentSource else { return }
             currentSource = source
-
             configureAudioSession()
-            player.stop()
+            playbackState?.resetForNewMedia()
+            removeTimeObserver()
 
-            let options = makeOptions(for: source)
-            if let audioURL = source.audioURL {
-                player.set(urls: [source.url, audioURL], options: options)
-            } else {
-                player.set(url: source.url, options: options)
-            }
+            let asset = AVURLAsset(url: source.url, options: assetOptions(headers: source.headers))
+            let item = AVPlayerItem(asset: asset)
+            item.preferredForwardBufferDuration = 2
+            player.replaceCurrentItem(with: item)
+            addTimeObserver()
             player.play()
         }
 
         func stop() {
-            player.stop()
-            exitFullscreen()
+            removeTimeObserver()
+            player.pause()
+            player.replaceCurrentItem(with: nil)
             currentSource = nil
         }
 
         private func bindCommands() {
             commandCenter?.togglePlayHandler = { [weak self] in
                 guard let self else { return }
-
-                if self.player.state.isPlaying {
+                if self.player.timeControlStatus == .playing {
                     self.player.pause()
                 } else {
                     self.player.play()
                 }
-
                 self.updatePlaybackState()
             }
 
             commandCenter?.seekHandler = { [weak self] position in
-                guard let self else { return }
-                let duration = self.player.player.duration
-                guard duration.isFinite, duration > 0 else {
-                    return
-                }
-
-                self.player.seek(time: duration * position, autoPlay: true) { [weak self] _ in
-                    self?.updatePlaybackState()
-                }
+                guard let self, let item = self.player.currentItem else { return }
+                let duration = item.duration
+                guard duration.isValid, duration.seconds.isFinite, duration.seconds > 0 else { return }
+                self.player.seek(to: CMTime(seconds: duration.seconds * position, preferredTimescale: 600))
             }
 
             commandCenter?.stopHandler = { [weak self] in
@@ -629,62 +513,60 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
             }
         }
 
+        private func addTimeObserver() {
+            timeObserver = player.addPeriodicTimeObserver(
+                forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
+                queue: .main
+            ) { [weak self] _ in
+                self?.updatePlaybackState()
+            }
+        }
+
+        private func removeTimeObserver() {
+            if let timeObserver {
+                player.removeTimeObserver(timeObserver)
+                self.timeObserver = nil
+            }
+        }
+
         fileprivate func updatePlaybackState() {
-            guard let playbackState else {
-                return
-            }
+            guard let playbackState else { return }
+            let currentTime = player.currentTime().seconds
+            let duration = player.currentItem?.duration.seconds ?? 0
 
-            let duration = player.player.duration
-            let currentTime = player.player.currentPlaybackTime
-
-            DispatchQueue.main.async {
-                if !playbackState.isScrubbing {
-                    if duration.isFinite, duration > 0 {
-                        playbackState.position = max(0, min(1, currentTime / duration))
-                    } else {
-                        playbackState.position = 0
-                    }
+            if !playbackState.isScrubbing {
+                if duration.isFinite, duration > 0, currentTime.isFinite {
+                    playbackState.position = max(0, min(1, currentTime / duration))
+                } else {
+                    playbackState.position = 0
                 }
-
-                playbackState.elapsedText = Self.format(seconds: currentTime)
-                playbackState.durationText = Self.format(seconds: duration)
-                playbackState.isPlaying = self.player.state.isPlaying
             }
-
+            playbackState.elapsedText = Self.format(seconds: currentTime)
+            playbackState.durationText = Self.format(seconds: duration)
+            playbackState.isPlaying = player.timeControlStatus == .playing
         }
 
         fileprivate static func format(seconds: TimeInterval) -> String {
-            guard seconds.isFinite else {
-                return "00:00"
-            }
-
+            guard seconds.isFinite else { return "00:00" }
             let totalSeconds = max(Int(seconds), 0)
             let hours = totalSeconds / 3600
             let minutes = (totalSeconds % 3600) / 60
             let seconds = totalSeconds % 60
-
             if hours > 0 {
                 return String(format: "%d:%02d:%02d", hours, minutes, seconds)
             }
-
             return String(format: "%02d:%02d", minutes, seconds)
         }
 
-        private func makeOptions(for source: PlayableVideoSource) -> KSOptions {
-            let options = KSOptions()
-            options.isSeekedAutoPlay = true
-            options.hardwareDecode = false
-            options.referer = source.headers["Referer"] ?? AppConfig.webBaseURL.absoluteString
-            options.userAgent = source.headers["User-Agent"] ?? AppConfig.defaultUserAgent
-            var headers = source.headers
+        private func assetOptions(headers: [String: String]) -> [String: Any] {
+            var injectedHeaders = headers
             let cookies = HTTPCookieStorage.shared.cookies ?? []
             if let cookieHeader = HTTPCookie.requestHeaderFields(with: cookies)["Cookie"], !cookieHeader.isEmpty {
-                headers["Cookie"] = cookieHeader
+                injectedHeaders["Cookie"] = cookieHeader
             }
-            headers["Accept"] = "*/*"
-            headers["Connection"] = "keep-alive"
-            options.appendHeader(headers)
-            return options
+            injectedHeaders["Accept"] = "*/*"
+            injectedHeaders["Connection"] = "keep-alive"
+            return ["AVURLAssetHTTPHeaderFieldsKey": injectedHeaders]
         }
 
         private func configureAudioSession() {
@@ -693,37 +575,19 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
                 try session.setCategory(.playback, mode: .moviePlayback, options: [])
                 try session.setActive(true)
             } catch {
-                print("Failed to configure audio session: \(error.localizedDescription)")
+                print("Failed to configure AVPlayer audio session: \(error.localizedDescription)")
             }
         }
     }
 }
 
-extension BilibiliVLCVideoSurface.Coordinator: KSPlayerLayerDelegate {
-    func player(layer: KSPlayerLayer, state: KSPlayerState) {
-        updatePlaybackState()
+final class AVPlayerContainerView: UIView {
+    override class var layerClass: AnyClass {
+        AVPlayerLayer.self
     }
 
-    func player(layer: KSPlayerLayer, currentTime: TimeInterval, totalTime: TimeInterval) {
-        guard let playbackState else {
-            return
-        }
-
-        DispatchQueue.main.async {
-            if !playbackState.isScrubbing, totalTime.isFinite, totalTime > 0 {
-                playbackState.position = max(0, min(1, currentTime / totalTime))
-            }
-
-            playbackState.elapsedText = Self.format(seconds: currentTime)
-            playbackState.durationText = Self.format(seconds: totalTime)
-            playbackState.isPlaying = layer.state.isPlaying
-        }
-
+    var playerLayer: AVPlayerLayer {
+        layer as! AVPlayerLayer
     }
-
-    func player(layer: KSPlayerLayer, finish error: Error?) {
-        updatePlaybackState()
-    }
-
-    func player(layer: KSPlayerLayer, bufferedCount: Int, consumeTime: TimeInterval) {}
 }
+
