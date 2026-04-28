@@ -34,7 +34,7 @@ struct PlayableVideoSource: Equatable {
 }
 
 struct PlayURLService {
-    private let defaultPreferredQuality = 112
+    private let defaultPreferredQuality = 80
     private let qualityFallbackOrder = [112, 116, 80, 74, 64, 32, 16, 6]
 
     func fetchPlayableSource(
@@ -57,7 +57,7 @@ struct PlayURLService {
             isLoggedIn = cookieHeader.contains("SESSDATA=")
         }
 
-        if quality < 80 {
+        if quality <= 80 {
             if let durlSource = try await fetchDURLSource(
                 bvid: bvid,
                 cid: cid,
@@ -81,6 +81,21 @@ struct PlayURLService {
             shouldTryLook: !isLoggedIn,
             headers: headers
         ) {
+            if (dashSource.quality ?? quality) <= 80,
+               let durlSource = try await fetchDURLSource(
+                bvid: bvid,
+                cid: cid,
+                preferredQuality: dashSource.quality ?? 80,
+                shouldTryLook: !isLoggedIn,
+                headers: headers
+               ) {
+                return await sourceByMergingDASHQualities(
+                    into: durlSource,
+                    bvid: bvid,
+                    cid: cid,
+                    headers: headers
+                )
+            }
             return dashSource
         }
 
