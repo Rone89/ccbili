@@ -139,19 +139,6 @@ final class HomeViewModel {
             return URL(string: path)
         }
 
-        let normalizedPath = components.path
-            .replacingOccurrences(of: ".webp", with: ".jpg")
-            .replacingOccurrences(of: ".avif", with: ".jpg")
-
-        if normalizedPath != components.path {
-            components.path = normalizedPath
-        }
-
-        let thumbSuffix = "@480w_270h_1c"
-        if !components.path.contains("@") {
-            components.path += thumbSuffix
-        }
-
         return components.url
     }
 }

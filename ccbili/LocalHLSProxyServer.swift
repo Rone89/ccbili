@@ -9,6 +9,8 @@ final class LocalHLSProxyServer {
     private var listener: NWListener?
     private var routes: [String: Route] = [:]
     private var routeCounter = 0
+    private var playlists: [String: String] = [:]
+    private var playlistCounter = 0
     private var headers: [String: String] = [:]
 
     private init() {}
@@ -20,6 +22,15 @@ final class LocalHLSProxyServer {
         routes[id] = Route(url: mediaURL)
         self.headers = headers
         return URL(string: "http://127.0.0.1:\(serverPort)/dash/\(id)")!
+    }
+
+    func registerPlaylist(_ content: String, name: String) throws -> URL {
+        try startIfNeeded()
+        playlistCounter += 1
+        let safeName = name.replacingOccurrences(of: "/", with: "-")
+        let id = "\(playlistCounter)-\(safeName)"
+        playlists[id] = content
+        return URL(string: "http://127.0.0.1:\(serverPort)/hls/\(id)")!
     }
 
     private func startIfNeeded() throws {
@@ -62,7 +73,28 @@ final class LocalHLSProxyServer {
         }
 
         let path = String(requestParts[1])
+        if path.hasPrefix("/hls/") {
+            let id = String(path.dropFirst("/hls/".count).split(separator: "?").first ?? "")
+            guard let playlist = playlists[id] else {
+                HLSPlaybackDiagnostics.shared.recordPlaylist(path: path, status: 404)
+                send(status: 404, body: Data(), connection: connection)
+                return
+            }
+            HLSPlaybackDiagnostics.shared.recordPlaylist(path: path, status: 200)
+            send(
+                status: 200,
+                headers: [
+                    "Content-Type": "application/vnd.apple.mpegurl; charset=utf-8",
+                    "Cache-Control": "no-cache"
+                ],
+                body: Data(playlist.utf8),
+                connection: connection
+            )
+            return
+        }
+
         guard path.hasPrefix("/dash/") else {
+            HLSPlaybackDiagnostics.shared.recordPlaylist(path: path, status: 404)
             send(status: 404, body: Data(), connection: connection)
             return
         }

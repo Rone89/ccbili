@@ -33,46 +33,34 @@ struct DashHLSManifestService {
             audioIndex: source.audioIndexRange
         )
 
-        let directory = try workingDirectory(bvid: source.bvid, cid: source.cid, quality: source.quality)
-        let videoPlaylistURL = directory.appendingPathComponent("video.m3u8")
-        let audioPlaylistURL = directory.appendingPathComponent("audio.m3u8")
-        let masterURL = directory.appendingPathComponent("master.m3u8")
-
         let proxiedVideoURL = try LocalHLSProxyServer.shared.register(mediaURL: source.url, headers: source.headers)
         let proxiedAudioURL = try LocalHLSProxyServer.shared.register(mediaURL: audioURL, headers: source.headers)
 
-        try mediaPlaylist(
+        let videoPlaylist = mediaPlaylist(
             mediaURL: proxiedVideoURL,
             initRange: videoInitRange,
             indexRange: videoIndexRange,
             segments: parsedVideoSegments
-        ).write(to: videoPlaylistURL, atomically: true, encoding: .utf8)
+        )
 
-        try mediaPlaylist(
+        let audioPlaylist = mediaPlaylist(
             mediaURL: proxiedAudioURL,
             initRange: audioInitRange,
             indexRange: audioIndexRange,
             segments: parsedAudioSegments
-        ).write(to: audioPlaylistURL, atomically: true, encoding: .utf8)
+        )
 
-        try masterPlaylist(
+        let videoPlaylistURL = try LocalHLSProxyServer.shared.registerPlaylist(videoPlaylist, name: "video.m3u8")
+        let audioPlaylistURL = try LocalHLSProxyServer.shared.registerPlaylist(audioPlaylist, name: "audio.m3u8")
+
+        let masterPlaylist = masterPlaylist(
             source: source,
             videoPlaylistURL: videoPlaylistURL,
             audioPlaylistURL: audioPlaylistURL,
             segments: parsedVideoSegments
-        ).write(to: masterURL, atomically: true, encoding: .utf8)
+        )
 
-        return masterURL
-    }
-
-    private func workingDirectory(bvid: String, cid: Int, quality: Int?) throws -> URL {
-        let qualityValue = quality.map(String.init) ?? "auto"
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        let directory = caches
-            .appendingPathComponent("DashHLS", isDirectory: true)
-            .appendingPathComponent("\(bvid)-\(cid)-\(qualityValue)-v2", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory
+        return try LocalHLSProxyServer.shared.registerPlaylist(masterPlaylist, name: "master.m3u8")
     }
 
     private func segments(mediaURL: URL, indexRange: ByteRange, headers: [String: String]) async throws -> [HLSSegment] {
@@ -119,6 +107,7 @@ struct DashHLSManifestService {
             "#EXT-X-PLAYLIST-TYPE:VOD",
             "#EXT-X-TARGETDURATION:\(targetDuration)",
             "#EXT-X-MEDIA-SEQUENCE:0",
+            "#EXT-X-INDEPENDENT-SEGMENTS",
             "#EXT-X-MAP:URI=\"\(escapedURL)\",BYTERANGE=\"\(initRange.length)@\(initRange.offset)\""
         ]
 
@@ -152,9 +141,9 @@ struct DashHLSManifestService {
         return """
         #EXTM3U
         #EXT-X-VERSION:7
-        #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="DASH Audio",DEFAULT=YES,AUTOSELECT=YES,URI="\(audioPlaylistURL.lastPathComponent)"
+        #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="DASH Audio",DEFAULT=YES,AUTOSELECT=YES,URI="\(audioPlaylistURL.absoluteString)"
         #EXT-X-STREAM-INF:\(streamInfo)
-        \(videoPlaylistURL.lastPathComponent)
+        \(videoPlaylistURL.absoluteString)
         """
     }
 
@@ -204,17 +193,18 @@ private struct SIDXParser {
             throw APIError.serverMessage("DASH HLS timescale 异常")
         }
 
+        let firstOffset: UInt64
         if version == 0 {
             _ = reader.readUInt32()
-            _ = reader.readUInt32()
+            firstOffset = UInt64(reader.readUInt32())
         } else {
             _ = reader.readUInt64()
-            _ = reader.readUInt64()
+            firstOffset = reader.readUInt64()
         }
 
         _ = reader.readUInt16()
         let referenceCount = Int(reader.readUInt16())
-        var offset = mediaOffset
+        var offset = mediaOffset + Int64(firstOffset)
         var segments: [HLSSegment] = []
         segments.reserveCapacity(referenceCount)
 

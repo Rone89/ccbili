@@ -7,6 +7,7 @@ final class HLSPlaybackDiagnostics {
     private var manifestText = "manifest=-"
     private var proxyText = "proxy=-"
     private var requestCount = 0
+    private var playlistCount = 0
 
     private init() {}
 
@@ -15,6 +16,15 @@ final class HLSPlaybackDiagnostics {
         manifestText = "manifest=-"
         proxyText = "proxy=-"
         requestCount = 0
+        playlistCount = 0
+        lock.unlock()
+    }
+
+    func recordPlaylist(path: String, status: Int) {
+        lock.lock()
+        playlistCount += 1
+        let shortPath = path.split(separator: "?").first.map(String.init) ?? path
+        proxyText = "hls#\(playlistCount) \(status) path=\(shortPath) \(proxyText)"
         lock.unlock()
     }
 
