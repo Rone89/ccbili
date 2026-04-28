@@ -11,16 +11,19 @@ final class MPVPlayerController {
         mpv = mpv_create()
         guard let mpv else { return }
         mpv_request_log_messages(mpv, "warn")
-        setOption("vo", value: "gpu")
+        setOption("vo", value: "avfoundation")
         setOption("keepaspect", value: "yes")
         setOption("input-default-bindings", value: "no")
         setOption("input-vo-keyboard", value: "no")
-        setOption("hwdec", value: "videotoolbox")
+        setOption("hwdec", value: "auto-safe")
+        setOption("gpu-api", value: "opengl")
         setOption("profile", value: "fast")
         setOption("cache", value: "yes")
         setOption("demuxer-max-bytes", value: "128MiB")
         setOption("demuxer-readahead-secs", value: "8")
         setOption("force-seekable", value: "yes")
+        setOption("audio-file-auto", value: "no")
+        setOption("audio-pitch-correction", value: "no")
     }
 
     deinit {
@@ -44,7 +47,8 @@ final class MPVPlayerController {
         configureAudioSession()
         configureHeaders(source.headers)
         if let audioURL = source.audioURL {
-            command(["loadfile", source.url.absoluteString, "replace", "audio-file=\(audioURL.absoluteString)"])
+            command(["loadfile", source.url.absoluteString, "replace"])
+            command(["audio-add", audioURL.absoluteString, "select", "dash-audio"])
         } else {
             command(["loadfile", source.url.absoluteString, "replace"])
         }

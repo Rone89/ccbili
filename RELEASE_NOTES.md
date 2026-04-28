@@ -1,10 +1,10 @@
 ﻿## 本版本修复
 
-- 参考 PiliPlus/公开 Bilibili API 的 DASH 播放方式：1080P+/1080P60/4K 不再整段下载合流后播放，改为 `libmpv` 直接流式加载视频轨 + 音频轨。
-- DASH 音频改为随 `loadfile` 一起传入 `audio-file`，减少先出画后补音轨的问题。
-- 修正 mpv HTTP Header 为逐行格式，并补充 Referer/User-Agent/Cookie，提升 B 站 CDN 分离流直连成功率。
-- mpv 打开 `videotoolbox` 硬解，降低高分辨率播放压力。
+- 坚持使用 DASH 流式播放，不回退本地完整下载合流。
+- mpv 流式路径调整为 `vo=avfoundation` + `hwdec=auto-safe`，避免上一版 `gpu/wid` 在 iOS 嵌入视图里黑屏。
+- DASH 音频改回 `audio-add select`，视频先 `loadfile`，再挂载音频轨，兼容当前 libmpv 命令集。
+- 诊断文本标记为 `DASH/mpv-stream-v2`，方便确认运行的是本次流式路径。
 
 ## 说明
 
-这是最小化的 mpv 流式 DASH 测试版，目标是解决 1080P+ 和 4K 首次加载很久的问题：不再等待完整下载与本地合流，而是像 PiliPlus 一样让播放器流式读取 DASH 双轨。
+PiliPlus 秒开的核心是 DASH 视频轨和音频轨交给播放器流式读取。本版本继续沿这个方向修 mpv 的 iOS 渲染/音频挂载方式。
