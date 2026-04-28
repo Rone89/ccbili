@@ -21,6 +21,7 @@ struct VideoDetailView: View {
     @State private var coinErrorMessage: String?
     @State private var selectedTab: DetailTab = .intro
     @State private var commentSortMode: CommentSortMode = .hot
+    @State private var playerScrollOffset: CGFloat = 0
 
     private let biliPink = Color(red: 251 / 255, green: 114 / 255, blue: 153 / 255)
     private let replyService = ReplyService()
@@ -37,11 +38,22 @@ struct VideoDetailView: View {
         GeometryReader { proxy in
             let contentWidth = max(proxy.size.width - pageHorizontalInset * 2, 0)
             let playerHeight = contentWidth * 9 / 16
+            let isMiniPlayer = playerScrollOffset < -(playerHeight * 0.72)
+            let floatingPlayerWidth = isMiniPlayer ? min(proxy.size.width * 0.52, 230) : contentWidth
+            let floatingPlayerHeight = floatingPlayerWidth * 9 / 16
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    playerCardSection(height: playerHeight)
+                    playerPlaceholderSection(height: playerHeight)
                         .frame(width: contentWidth)
+                        .background(
+                            GeometryReader { geometry in
+                                Color.clear.preference(
+                                    key: PlayerOffsetPreferenceKey.self,
+                                    value: geometry.frame(in: .named("videoDetailScroll")).minY
+                                )
+                            }
+                        )
 
                     titleCardSection
                         .frame(width: contentWidth)
@@ -66,7 +78,22 @@ struct VideoDetailView: View {
                 .padding(.bottom, 24)
                 .frame(maxWidth: .infinity, alignment: .top)
             }
+            .coordinateSpace(name: "videoDetailScroll")
+            .onPreferenceChange(PlayerOffsetPreferenceKey.self) { value in
+                playerScrollOffset = value
+            }
             .background(Color(.systemGroupedBackground))
+            .overlay(alignment: .topLeading) {
+                playerCardSection(height: floatingPlayerHeight)
+                    .frame(width: floatingPlayerWidth, height: floatingPlayerHeight)
+                    .shadow(color: .black.opacity(isMiniPlayer ? 0.18 : 0), radius: 18, x: 0, y: 8)
+                    .offset(
+                        x: isMiniPlayer ? proxy.size.width - floatingPlayerWidth - pageHorizontalInset : pageHorizontalInset,
+                        y: 12
+                    )
+                    .animation(.spring(response: 0.32, dampingFraction: 0.86), value: isMiniPlayer)
+                    .zIndex(10)
+            }
         }
         .navigationTitle("视频详情")
         .navigationBarTitleDisplayMode(.inline)
@@ -119,11 +146,23 @@ struct VideoDetailView: View {
             }
     }
 
+    private func playerPlaceholderSection(height: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: detailCardCornerRadius, style: .continuous)
+            .fill(Color.black.opacity(0.92))
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .overlay {
+                RoundedRectangle(cornerRadius: detailCardCornerRadius, style: .continuous)
+                    .strokeBorder(Color(.separator).opacity(0.08), lineWidth: 0.5)
+            }
+    }
+
     @ViewBuilder
     private func videoHeaderSection(height: CGFloat) -> some View {
         if let source = viewModel.playbackSource {
             BilibiliVLCPlayerView(
                 source: source,
+                enablesAutoFullscreen: false,
                 initialPosition: playbackPosition,
                 onPositionChange: { position in
                     playbackPosition = position
@@ -933,6 +972,14 @@ private enum DetailTab: Hashable {
     case intro
     case comments
     case related
+}
+
+private struct PlayerOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
 }
 
 private enum CommentSortMode: CaseIterable {

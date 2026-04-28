@@ -62,20 +62,24 @@ struct BilibiliVLCPlayerView: View {
             .statusBarHidden(isFullscreenPresented)
             .animation(.easeInOut(duration: 0.25), value: isFullscreenPresented)
             .background(
-                FullscreenPlayerWindowPresenter(
-                    isPresented: isFullscreenPresented,
-                    orientation: fullscreenOrientation,
-                    playbackState: playbackState,
-                    commandCenter: commandCenter,
-                    debugText: isPlaybackDiagnosticsEnabled ? currentSource.debugDescription.map(debugText(base:)) : nil,
-                    onLayerDetachedChange: { isDetached in
-                        isPlayerLayerDetachedForFullscreen = isDetached
-                    },
-                    onDismiss: {
-                        isFullscreenPresented = false
+                Group {
+                    if enablesAutoFullscreen {
+                        FullscreenPlayerWindowPresenter(
+                            isPresented: isFullscreenPresented,
+                            orientation: fullscreenOrientation,
+                            playbackState: playbackState,
+                            commandCenter: commandCenter,
+                            debugText: isPlaybackDiagnosticsEnabled ? currentSource.debugDescription.map(debugText(base:)) : nil,
+                            onLayerDetachedChange: { isDetached in
+                                isPlayerLayerDetachedForFullscreen = isDetached
+                            },
+                            onDismiss: {
+                                isFullscreenPresented = false
+                            }
+                        )
+                        .frame(width: 0, height: 0)
                     }
-                )
-                .frame(width: 0, height: 0)
+                }
             )
         .onAppear {
             showControlsTemporarily()
