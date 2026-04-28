@@ -1,5 +1,4 @@
 ﻿import AVFoundation
-import FFmpegKit
 import Foundation
 
 struct DashRemuxService {
@@ -27,12 +26,7 @@ struct DashRemuxService {
         async let audioDownload: Void = downloadIfNeeded(from: audioURL, to: audioFile, headers: headers)
         _ = try await (videoDownload, audioDownload)
 
-        do {
-            return try await ffmpegMerge(videoFile: videoFile, audioFile: audioFile, outputURL: outputURL)
-        } catch {
-            print("FFmpeg DASH merge failed: \(error.localizedDescription)")
-            return try await merge(videoFile: videoFile, audioFile: audioFile, outputURL: outputURL)
-        }
+        return try await merge(videoFile: videoFile, audioFile: audioFile, outputURL: outputURL)
     }
 
     private func workingDirectory(bvid: String, cid: Int, quality: Int?) throws -> URL {
@@ -94,47 +88,6 @@ struct DashRemuxService {
         result["Accept"] = "*/*"
         result["Connection"] = "keep-alive"
         return result
-    }
-
-    private func ffmpegMerge(videoFile: URL, audioFile: URL, outputURL: URL) async throws -> URL {
-        let temporaryOutputURL = outputURL.deletingLastPathComponent()
-            .appendingPathComponent("merged-\(UUID().uuidString)-ffmpeg.mp4")
-        if FileManager.default.fileExists(atPath: temporaryOutputURL.path) {
-            try FileManager.default.removeItem(at: temporaryOutputURL)
-        }
-
-        let arguments = [
-            "ffmpeg",
-            "-y",
-            "-i", videoFile.path,
-            "-i", audioFile.path,
-            "-map", "0:v:0",
-            "-map", "1:a:0",
-            "-c:v", "copy",
-            "-c:a", "copy",
-            "-shortest",
-            temporaryOutputURL.path
-        ]
-
-        try await runFFmpeg(arguments)
-        guard isPlayableFile(temporaryOutputURL) else {
-            throw APIError.serverMessage("DASH FFmpeg 合流输出为空")
-        }
-        if FileManager.default.fileExists(atPath: outputURL.path) {
-            try FileManager.default.removeItem(at: outputURL)
-        }
-        try FileManager.default.moveItem(at: temporaryOutputURL, to: outputURL)
-        return outputURL
-    }
-
-    private func runFFmpeg(_ arguments: [String]) async throws {
-        var argv = arguments.map {
-            UnsafeMutablePointer(mutating: ($0 as NSString).utf8String)
-        }
-        let returnCode = ffmpeg_execute(Int32(arguments.count), &argv)
-        if returnCode != 0 {
-            throw APIError.serverMessage("DASH FFmpeg 合流失败 \(returnCode)")
-        }
     }
 
     private func merge(videoFile: URL, audioFile: URL, outputURL: URL) async throws -> URL {
