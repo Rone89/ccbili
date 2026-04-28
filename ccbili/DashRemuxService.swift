@@ -128,19 +128,12 @@ struct DashRemuxService {
     }
 
     private func runFFmpeg(_ arguments: [String]) async throws {
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async {
-                var argv = arguments.map {
-                    UnsafeMutablePointer(mutating: ($0 as NSString).utf8String)
-                }
-                let returnCode = ffmpeg_execute(Int32(arguments.count), &argv)
-                if returnCode == 0 {
-                    continuation.resume()
-                    return
-                }
-
-                continuation.resume(throwing: APIError.serverMessage("DASH FFmpeg 合流失败 \(returnCode)"))
-            }
+        var argv = arguments.map {
+            UnsafeMutablePointer(mutating: ($0 as NSString).utf8String)
+        }
+        let returnCode = ffmpeg_execute(Int32(arguments.count), &argv)
+        if returnCode != 0 {
+            throw APIError.serverMessage("DASH FFmpeg 合流失败 \(returnCode)")
         }
     }
 
