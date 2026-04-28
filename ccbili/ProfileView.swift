@@ -1,7 +1,8 @@
-import SwiftUI
+﻿import SwiftUI
 
 struct ProfileView: View {
     @Environment(AuthManager.self) private var authManager
+    @AppStorage(AppSettings.playbackDiagnosticsEnabledKey) private var isPlaybackDiagnosticsEnabled = false
     @State private var isShowingQRCodeLogin = false
     @State private var isShowingWebLogin = false
 
@@ -57,6 +58,14 @@ struct ProfileView: View {
                         authManager.loginDemo()
                     }
                 }
+            }
+
+            Section("播放诊断") {
+                Toggle("显示播放诊断信息", isOn: $isPlaybackDiagnosticsEnabled)
+
+                Text("开启后，视频播放器顶部会显示取流接口、实际清晰度、Cookie 状态和 DASH 列表，便于排查播放失败或清晰度异常。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("说明") {

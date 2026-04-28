@@ -21,6 +21,7 @@ struct BilibiliVLCPlayerView: View {
 
     @StateObject private var playbackState = BilibiliVLCPlaybackState()
     @StateObject private var commandCenter = BilibiliVLCCommandCenter()
+    @AppStorage(AppSettings.playbackDiagnosticsEnabledKey) private var isPlaybackDiagnosticsEnabled = false
 
     @State private var currentSource: PlayableVideoSource
     @State private var areControlsVisible = true
@@ -151,7 +152,7 @@ struct BilibiliVLCPlayerView: View {
             VStack(spacing: 0) {
                 topControls
 
-                if let debugDescription = currentSource.debugDescription {
+                if isPlaybackDiagnosticsEnabled, let debugDescription = currentSource.debugDescription {
                     debugOverlay(debugDescription)
                 }
 
