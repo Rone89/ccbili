@@ -103,7 +103,7 @@ struct BilibiliVLCPlayerView: View {
     private var videoSurface: some View {
         Group {
             if currentSource.isDASHSeparated {
-                MPVPlayerView(
+                AVFoundationDASHPlayerView(
                     source: currentSource,
                     commandCenter: commandCenter
                 )
@@ -200,6 +200,7 @@ struct BilibiliVLCPlayerView: View {
             .lineLimit(3)
             .minimumScaleFactor(0.65)
             .multilineTextAlignment(.leading)
+            .truncationMode(.tail)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 7)

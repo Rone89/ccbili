@@ -1,9 +1,10 @@
 ﻿## 本版本修复
 
-- 确认 KSPlayer `set(urls:)` 是播放列表语义，不是 DASH 音视频合流，因此恢复 DASH 使用 libmpv。
-- 修复 libmpv 嵌入方式：`wid` 改为绑定 `UIView` 本身，而不是 `CALayer`，用于解决有声黑屏/无画面问题。
-- 播放诊断文本增加缩放和多行限制，减少超出视频框的问题。
+- API 已确认能返回 1080P+/4K DASH URL 后，黑屏定位为播放器处理远程分离音视频的问题。
+- 新增 AVFoundation DASH 播放器：分别加载远程视频轨和音频轨，使用 `AVMutableComposition` 组合后播放，绕开 libmpv/KSPlayer 当前黑屏路径。
+- DASH 源切换到 AVFoundation 组合播放器，普通合流源仍走原 KSPlayer 路径。
+- 播放诊断文本增加尾部截断，减少超出视频框。
 
 ## 说明
 
-请测试 1080P+/1080P60。如果仍黑屏，继续反馈诊断文本和是否有声音；下一步将改用 mpv render API 或 AVFoundation 本地合流兜底。
+请测试 1080P+/1080P60 是否能出画并有声音。如果加载变慢但能播放，下一步会做缓存和加载提示优化。
