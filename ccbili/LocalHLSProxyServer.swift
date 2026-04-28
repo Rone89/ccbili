@@ -75,8 +75,20 @@ final class LocalHLSProxyServer {
         do {
             let rangeHeader = headerValue("Range", in: rawRequest)
             let (data, responseHeaders, statusCode) = try await fetch(route: route, rangeHeader: rangeHeader)
+            HLSPlaybackDiagnostics.shared.recordProxy(
+                path: path,
+                requestRange: rangeHeader,
+                status: statusCode,
+                responseRange: responseHeaders["Content-Range"] ?? responseHeaders["content-range"],
+                bytes: data.count
+            )
             send(status: statusCode, headers: responseHeaders, body: data, connection: connection)
         } catch {
+            HLSPlaybackDiagnostics.shared.recordProxyError(
+                path: path,
+                requestRange: headerValue("Range", in: rawRequest),
+                message: error.localizedDescription
+            )
             send(status: 502, body: Data(), connection: connection)
         }
     }

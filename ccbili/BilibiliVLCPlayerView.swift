@@ -31,6 +31,8 @@ struct BilibiliVLCPlayerView: View {
     @State private var fullscreenOrientation: UIDeviceOrientation = .portrait
     @State private var pendingSeekPosition: Double?
     @State private var surfaceID = UUID()
+    @State private var hlsDiagnosticsText = HLSPlaybackDiagnostics.shared.summary
+    private let diagnosticsTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     init(
         source: PlayableVideoSource,
@@ -78,6 +80,9 @@ struct BilibiliVLCPlayerView: View {
             } else if orientation == .portrait || orientation == .portraitUpsideDown {
                 isFullscreenPresented = false
             }
+        }
+        .onReceive(diagnosticsTimer) { _ in
+            hlsDiagnosticsText = HLSPlaybackDiagnostics.shared.summary
         }
         .onDisappear {
             hideControlsTask?.cancel()
@@ -152,7 +157,7 @@ struct BilibiliVLCPlayerView: View {
                 topControls
 
                 if isPlaybackDiagnosticsEnabled, let debugDescription = currentSource.debugDescription {
-                    debugOverlay(debugDescription)
+                    debugOverlay(debugText(base: debugDescription))
                 }
 
                 Spacer()
@@ -206,6 +211,11 @@ struct BilibiliVLCPlayerView: View {
             .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .padding(.horizontal, 12)
             .padding(.top, 6)
+    }
+
+    private func debugText(base: String) -> String {
+        guard base.contains("DASH-to-HLS") else { return base }
+        return "\(base) \(hlsDiagnosticsText)"
     }
 
     private var qualityMenu: some View {

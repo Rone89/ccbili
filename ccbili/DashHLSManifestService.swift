@@ -25,6 +25,13 @@ struct DashHLSManifestService {
         guard !parsedVideoSegments.isEmpty, !parsedAudioSegments.isEmpty else {
             throw APIError.serverMessage("DASH HLS 分片索引为空")
         }
+        HLSPlaybackDiagnostics.shared.recordManifest(
+            videoSegments: parsedVideoSegments.count,
+            audioSegments: parsedAudioSegments.count,
+            targetDuration: max(1, Int(ceil(parsedVideoSegments.map(\.duration).max() ?? 1))),
+            videoIndex: source.videoIndexRange,
+            audioIndex: source.audioIndexRange
+        )
 
         let directory = try workingDirectory(bvid: source.bvid, cid: source.cid, quality: source.quality)
         let videoPlaylistURL = directory.appendingPathComponent("video.m3u8")

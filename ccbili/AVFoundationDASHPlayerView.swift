@@ -80,6 +80,7 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
 
             if (source.quality ?? 0) > 80 {
                 do {
+                    HLSPlaybackDiagnostics.shared.reset()
                     let manifestURL = try await DashHLSManifestService().makeManifest(for: source)
                     guard !Task.isCancelled else { return }
                     await MainActor.run {
