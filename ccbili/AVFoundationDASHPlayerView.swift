@@ -95,6 +95,20 @@ struct AVFoundationDASHPlayerView: UIViewRepresentable {
                 self.updatePlaybackState()
             }
 
+            commandCenter?.playHandler = { [weak self] in
+                guard let self else { return }
+                self.shouldAutoplay = true
+                self.player.play()
+                self.updatePlaybackState()
+            }
+
+            commandCenter?.pauseHandler = { [weak self] in
+                guard let self else { return }
+                self.shouldAutoplay = false
+                self.player.pause()
+                self.updatePlaybackState()
+            }
+
             commandCenter?.seekHandler = { [weak self] position, resumePlayback in
                 guard let self, let item = self.player.currentItem else { return }
                 let duration = item.duration
