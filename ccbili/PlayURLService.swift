@@ -37,11 +37,13 @@ struct PlayURLService {
         var headers = [
             "Referer": referer,
             "Origin": AppConfig.webBaseURL.absoluteString,
-            "User-Agent": AppConfig.dartUserAgent,
+            "User-Agent": AppConfig.desktopUserAgent,
             "Accept-Encoding": "br,gzip"
         ]
+        var isLoggedIn = false
         if let cookieHeader = BilibiliCookieStore.cookieHeader() {
             headers["Cookie"] = cookieHeader
+            isLoggedIn = cookieHeader.contains("SESSDATA=")
         }
 
         if quality <= 80 {
@@ -49,6 +51,7 @@ struct PlayURLService {
                 bvid: bvid,
                 cid: cid,
                 preferredQuality: quality,
+                shouldTryLook: !isLoggedIn,
                 headers: headers
             ) {
                 return await sourceByMergingDASHQualities(
@@ -64,6 +67,7 @@ struct PlayURLService {
             bvid: bvid,
             cid: cid,
             preferredQuality: quality,
+            shouldTryLook: !isLoggedIn,
             headers: headers
         ) {
             return dashSource
@@ -74,6 +78,7 @@ struct PlayURLService {
                 bvid: bvid,
                 cid: cid,
                 preferredQuality: 80,
+                shouldTryLook: !isLoggedIn,
                 headers: headers
             ) {
                 return durlSource
@@ -98,6 +103,7 @@ struct PlayURLService {
         bvid: String,
         cid: Int,
         preferredQuality: Int,
+        shouldTryLook: Bool,
         headers: [String: String]
     ) async throws -> PlayableVideoSource? {
         let data = try await fetchPlayURLData(
@@ -105,6 +111,7 @@ struct PlayURLService {
             cid: cid,
             preferredQuality: preferredQuality,
             fnval: "4048",
+            shouldTryLook: shouldTryLook,
             headers: headers
         )
 
@@ -155,6 +162,7 @@ struct PlayURLService {
         bvid: String,
         cid: Int,
         preferredQuality: Int,
+        shouldTryLook: Bool,
         headers: [String: String]
     ) async throws -> PlayableVideoSource? {
         let data = try await fetchPlayURLData(
@@ -162,6 +170,7 @@ struct PlayURLService {
             cid: cid,
             preferredQuality: preferredQuality,
             fnval: "0",
+            shouldTryLook: shouldTryLook,
             headers: headers
         )
 
@@ -196,6 +205,7 @@ struct PlayURLService {
                 cid: cid,
                 preferredQuality: 116,
                 fnval: "4048",
+                shouldTryLook: !(headers["Cookie"]?.contains("SESSDATA=") ?? false),
                 headers: headers
             )
             let mergedQualities = mergedQualityOptions(
@@ -252,6 +262,7 @@ struct PlayURLService {
         cid: Int,
         preferredQuality: Int,
         fnval: String,
+        shouldTryLook: Bool,
         headers: [String: String]
     ) async throws -> PlayURLDataDTO {
         do {
@@ -260,6 +271,7 @@ struct PlayURLService {
                 cid: cid,
                 preferredQuality: preferredQuality,
                 fnval: fnval,
+                shouldTryLook: shouldTryLook,
                 headers: headers
             )
         } catch {
@@ -268,6 +280,7 @@ struct PlayURLService {
                 cid: cid,
                 preferredQuality: preferredQuality,
                 fnval: fnval,
+                shouldTryLook: shouldTryLook,
                 headers: headers
             )
         }
@@ -278,6 +291,7 @@ struct PlayURLService {
         cid: Int,
         preferredQuality: Int,
         fnval: String,
+        shouldTryLook: Bool,
         headers: [String: String]
     ) async throws -> PlayURLDataDTO {
         var components = URLComponents(
@@ -285,7 +299,7 @@ struct PlayURLService {
             resolvingAgainstBaseURL: false
         )
 
-        let queryItems = [
+        var queryItems = [
             URLQueryItem(name: "bvid", value: bvid),
             URLQueryItem(name: "cid", value: String(cid)),
             URLQueryItem(name: "qn", value: String(preferredQuality)),
@@ -294,9 +308,11 @@ struct PlayURLService {
             URLQueryItem(name: "otype", value: "json"),
             URLQueryItem(name: "fourk", value: "1"),
             URLQueryItem(name: "platform", value: "pc"),
-            URLQueryItem(name: "high_quality", value: "1"),
-            URLQueryItem(name: "try_look", value: "1")
+            URLQueryItem(name: "high_quality", value: "1")
         ]
+        if shouldTryLook {
+            queryItems.append(URLQueryItem(name: "try_look", value: "1"))
+        }
 
         components?.queryItems = queryItems
 
@@ -324,6 +340,7 @@ struct PlayURLService {
         cid: Int,
         preferredQuality: Int,
         fnval: String,
+        shouldTryLook: Bool,
         headers: [String: String]
     ) async throws -> PlayURLDataDTO {
         var components = URLComponents(
@@ -331,7 +348,7 @@ struct PlayURLService {
             resolvingAgainstBaseURL: false
         )
 
-        let queryItems = try await WBI.shared.signedQueryItems(from: [
+        var parameters = [
             "bvid": bvid,
             "cid": String(cid),
             "qn": String(preferredQuality),
@@ -342,9 +359,13 @@ struct PlayURLService {
             "voice_balance": "1",
             "gaia_source": "pre-load",
             "isGaiaAvoided": "true",
-            "web_location": "1315873",
-            "try_look": "1"
-        ])
+            "web_location": "1315873"
+        ]
+        if shouldTryLook {
+            parameters["try_look"] = "1"
+        }
+
+        let queryItems = try await WBI.shared.signedQueryItems(from: parameters)
 
         components?.queryItems = queryItems
 
