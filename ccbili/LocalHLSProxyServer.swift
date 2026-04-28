@@ -5,8 +5,8 @@ final class LocalHLSProxyServer {
     static let shared = LocalHLSProxyServer()
 
     private let queue = DispatchQueue(label: "ccbili.local-hls-proxy")
+    private let serverPort: UInt16 = 28757
     private var listener: NWListener?
-    private var port: UInt16?
     private var routes: [String: Route] = [:]
     private var routeCounter = 0
     private var headers: [String: String] = [:]
@@ -19,23 +19,22 @@ final class LocalHLSProxyServer {
         let id = String(routeCounter)
         routes[id] = Route(url: mediaURL)
         self.headers = headers
-        guard let port else { throw APIError.serverMessage("HLS 本地代理端口异常") }
-        return URL(string: "http://127.0.0.1:\(port)/dash/\(id)")!
+        return URL(string: "http://127.0.0.1:\(serverPort)/dash/\(id)")!
     }
 
     private func startIfNeeded() throws {
         if listener != nil { return }
         let parameters = NWParameters.tcp
         parameters.allowLocalEndpointReuse = true
-        let listener = try NWListener(using: parameters, on: .any)
+        guard let port = NWEndpoint.Port(rawValue: serverPort) else {
+            throw APIError.serverMessage("HLS 本地代理端口异常")
+        }
+        let listener = try NWListener(using: parameters, on: port)
         listener.newConnectionHandler = { [weak self] connection in
             self?.handle(connection: connection)
         }
         listener.start(queue: queue)
         self.listener = listener
-        if case let .port(nwPort) = listener.port {
-            port = nwPort.rawValue
-        }
     }
 
     private func handle(connection: NWConnection) {
