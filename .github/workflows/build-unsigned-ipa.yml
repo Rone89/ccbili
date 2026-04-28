@@ -32,15 +32,6 @@ jobs:
             -scheme ccbili \
             -derivedDataPath build
 
-      - name: Patch package bundle identifiers
-        run: |
-          set -euo pipefail
-          find build/SourcePackages/checkouts/FFmpegKit/Sources/libshaderc_combined.xcframework -path '*/libshaderc_combined.framework/Info.plist' -print0 | while IFS= read -r -d '' plist; do
-            echo "Patching $plist"
-            chmod u+w "$plist" || true
-            /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.kintan.ksplayer.libshaderc-combined" "$plist"
-          done
-
       - name: Build app without signing
         run: |
           set -euo pipefail
