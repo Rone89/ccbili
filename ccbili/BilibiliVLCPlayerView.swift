@@ -964,6 +964,15 @@ private extension UIView {
     }
 }
 
+private extension CATransaction {
+    static func performWithoutActions(_ updates: () -> Void) {
+        begin()
+        setDisableActions(true)
+        updates()
+        commit()
+    }
+}
+
 private struct BilibiliVLCVideoSurface: UIViewRepresentable {
     let source: PlayableVideoSource
     let playbackState: BilibiliVLCPlaybackState
