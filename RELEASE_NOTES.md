@@ -1,9 +1,5 @@
-﻿## 本版本修复
+## 鏈増鏈慨澶?
+- 瑙嗛璇︽儏椤垫挱鏀惧櫒鍦?`AVPlayerItem.status == .readyToPlay` 鍚庤鍙栬棰戣建閬撳師濮嬪昂瀵革紝骞舵寜鐪熷疄瀹介珮姣旇嚜鍔ㄨ皟鏁寸獥鍙ｉ珮搴︺€?- 鎾斁鍣ㄩ珮搴﹂檺鍒朵负灞忓箷楂樺害鐨?70%锛岄伩鍏嶇珫灞忚棰戞拺婊￠〉闈€?- GitHub Actions 鏀寔鎵嬪姩濉啓 elease_tag 鐢熸垚鏈鍚?IPA 骞跺垱寤?GitHub Release銆?- 淇 SearchView.swift 缁撴瀯闂悎鍜屽巻鍙插叧閿瘝璋冪敤閿欒锛岀‘淇?Release 鏋勫缓閫氳繃銆?
+## 璇存槑
 
-- 视频详情页播放器在 `AVPlayerItem.status == .readyToPlay` 后读取视频轨道原始尺寸，并按真实宽高比自动调整窗口高度。
-- 播放器高度限制为屏幕高度的 70%，避免竖屏视频撑满页面。
-- GitHub Actions 支持手动填写 `release_tag` 生成未签名 IPA 并创建 GitHub Release。
-
-## 说明
-
-未签名 IPA 会作为 Release 附件上传，适合后续自行签名或侧载测试。
+鏈鍚?IPA 浼氫綔涓?Release 闄勪欢涓婁紶锛岄€傚悎鍚庣画鑷绛惧悕鎴栦晶杞芥祴璇曘€?

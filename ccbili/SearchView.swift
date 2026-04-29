@@ -16,78 +16,10 @@ struct SearchView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 searchBar
-
-                if !viewModel.searchHistory.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("搜索历史")
-                                .font(.headline)
-
-                            Spacer()
-
-                Button("清空") {
-                                viewModel.clearHistory()
-                            }
-                            .font(.subheadline)
-                        }
-
-                        historyTagsView
-                    }
-                }
-
-                if viewModel.isLoading {
-                    HStack(spacing: 10) {
-                        ProgressView()
-                        Text("正在搜索...")
-                            .font(.subheadline)
-                .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 6)
-                }
-
-                if let errorMessage = viewModel.errorMessage {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("搜索错误")
-                            .font(.headline)
-
-                        Text(errorMessage)
-                            .font(.subheadline)
-                            .foregroundStyle(.red)
-                    }
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("搜索结果")
-                        .font(.headline)
-
-                    if !viewModel.isLoading && viewModel.results.isEmpty {
-                        ContentUnavailableView(
-                            "暂无搜索结果",
-                            systemImage: "magnifyingglass",
-                            description: Text("试更换关键词")
-                        )
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 16)
-                    } else {
-                        LazyVGrid(columns: columns, spacing: 18) {
-                            ForEach(viewModel.results) { item in
-                                NavigationLink {
-                                    VideoDetailView(item: item)
-                                } label: {
-                                    VideoListRowView(
-                                        title: item.title,
-                                subtitle: item.subtitle,
-                                accessoryText: item.bvid,
-                                        coverURL: item.coverURL
-                                    )
-                                }.buttonStyle(.plain)
-                }
-                        }
-                }
+                searchHistorySection
+                loadingSection
+                errorSection
+                resultsSection
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
@@ -112,6 +44,7 @@ struct SearchView: View {
                 TextField("搜索视频、番剧或 UP 主", text: $viewModel.keyword)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .submitLabel(.search)
             }
             .padding(.horizontal, 12)
             .frame(height: 40)
@@ -126,10 +59,95 @@ struct SearchView: View {
         }
     }
 
+    @ViewBuilder
+    private var searchHistorySection: some View {
+        if !viewModel.searchHistory.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("搜索历史")
+                        .font(.headline)
+
+                    Spacer()
+
+                    Button("清空") {
+                        viewModel.clearHistory()
+                    }
+                    .font(.subheadline)
+                }
+
+                historyTagsView
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var loadingSection: some View {
+        if viewModel.isLoading {
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("正在搜索...")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 6)
+        }
+    }
+
+    @ViewBuilder
+    private var errorSection: some View {
+        if let errorMessage = viewModel.errorMessage {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("搜索错误")
+                    .font(.headline)
+
+                Text(errorMessage)
+                    .font(.subheadline)
+                    .foregroundStyle(.red)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+    }
+
+    private var resultsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("搜索结果")
+                .font(.headline)
+
+            if !viewModel.isLoading && viewModel.results.isEmpty {
+                ContentUnavailableView(
+                    "暂无搜索结果",
+                    systemImage: "magnifyingglass",
+                    description: Text("试试更换关键词")
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.top, 16)
+            } else {
+                LazyVGrid(columns: columns, spacing: 18) {
+                    ForEach(viewModel.results) { item in
+                        NavigationLink {
+                            VideoDetailView(item: item)
+                        } label: {
+                            VideoListRowView(
+                                title: item.title,
+                                subtitle: item.subtitle,
+                                accessoryText: item.bvid,
+                                coverURL: item.coverURL
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
     private var historyTagsView: some View {
         FlexibleTagFlowView(tags: viewModel.searchHistory) { history in
             Button {
-                viewModel.aplyHistory(history)
+                viewModel.applyHistory(history)
                 Task {
                     await viewModel.search()
                 }
@@ -137,8 +155,8 @@ struct SearchView: View {
                 Text(history)
                     .font(.subheadline)
                     .foregroundStyle(.primary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                     .background(.thinMaterial, in: Capsule())
             }
             .buttonStyle(.plain)
