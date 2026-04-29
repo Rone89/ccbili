@@ -222,6 +222,7 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
             controller.animateOut { [weak self] in
                 controller.detachPlayer()
                 window.isHidden = true
+                AppOrientationController.lock(.portrait, scene: window.windowScene)
                 self?.inlinePlayerViewController?.player = self?.player
             }
         }
@@ -436,12 +437,14 @@ final class LandscapePlayerFullscreenController: UIViewController {
     }
 
     override var prefersStatusBarHidden: Bool { true }
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
+    override var prefersHomeIndicatorAutoHidden: Bool { true }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { orientationMask }
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .portrait }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
+        setNeedsUpdateOfHomeIndicatorAutoHidden()
 
         playerViewController.player = player
         playerViewController.showsPlaybackControls = true
@@ -455,6 +458,12 @@ final class LandscapePlayerFullscreenController: UIViewController {
         update(orientation: orientation)
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        setNeedsUpdateOfSupportedInterfaceOrientations()
+        AppOrientationController.lock(orientationMask, scene: view.window?.windowScene)
+    }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         layoutPlayerView()
@@ -463,6 +472,8 @@ final class LandscapePlayerFullscreenController: UIViewController {
     func update(orientation: UIDeviceOrientation) {
         self.orientation = orientation
         guard isViewLoaded else { return }
+        setNeedsUpdateOfSupportedInterfaceOrientations()
+        AppOrientationController.lock(orientationMask, scene: view.window?.windowScene)
         currentScale = 1
         currentAlpha = 1
         currentCenter = nil
@@ -539,6 +550,10 @@ final class LandscapePlayerFullscreenController: UIViewController {
         let inlineHeight = bounds.width * 9 / 16
         let fullscreenHeight = bounds.width
         return max(0.2, min(1, inlineHeight / fullscreenHeight))
+    }
+
+    private var orientationMask: UIInterfaceOrientationMask {
+        orientation == .landscapeLeft ? .landscapeRight : .landscapeLeft
     }
 }
 
