@@ -228,7 +228,6 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
         }
 
         private func loadAndPlay(source: PlayableVideoSource) async {
-            guard let audioURL = source.audioURL else { return }
             configureAudioSession()
 
             if (source.quality ?? 0) > 80 {
@@ -252,6 +251,11 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
                 return
             }
 
+            guard let audioURL = source.audioURL else {
+                await loadSingleURL(source: source)
+                return
+            }
+
             do {
                 let item = try await makePlayerItem(videoURL: source.url, audioURL: audioURL, headers: source.headers)
                 guard !Task.isCancelled else { return }
@@ -264,6 +268,21 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
                 }
             } catch {
                 print("AVFoundation DASH load failed: \(error.localizedDescription)")
+            }
+        }
+
+        private func loadSingleURL(source: PlayableVideoSource) async {
+            let asset = AVURLAsset(url: source.url, options: assetOptions(headers: source.headers))
+            let item = AVPlayerItem(asset: asset)
+            item.preferredForwardBufferDuration = 0.8
+
+            await MainActor.run {
+                self.player.automaticallyWaitsToMinimizeStalling = false
+                self.observe(item: item)
+                self.player.replaceCurrentItem(with: item)
+                self.addTimeObserver()
+                self.updatePlaybackState()
+                self.playWhenReady(item: item)
             }
         }
 
@@ -536,11 +555,9 @@ final class LandscapePlayerFullscreenController: UIViewController {
 
     private func layoutPlayerView() {
         let bounds = view.bounds
-        let rotationAngle: CGFloat = orientation == .landscapeLeft ? .pi / 2 : -.pi / 2
-        playerViewController.view.bounds = CGRect(x: 0, y: 0, width: bounds.height, height: bounds.width)
+        playerViewController.view.bounds = CGRect(origin: .zero, size: bounds.size)
         playerViewController.view.center = currentCenter ?? CGPoint(x: bounds.midX, y: bounds.midY)
-        playerViewController.view.transform = CGAffineTransform(rotationAngle: rotationAngle)
-            .scaledBy(x: currentScale, y: currentScale)
+        playerViewController.view.transform = CGAffineTransform(scaleX: currentScale, y: currentScale)
         playerViewController.view.alpha = currentAlpha
     }
 

@@ -152,7 +152,7 @@ struct BilibiliVLCPlayerView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
-            if !currentSource.isDASHSeparated {
+            if shouldUseCustomControls {
                 Color.black.opacity(0.001)
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) {
@@ -172,7 +172,7 @@ struct BilibiliVLCPlayerView: View {
 
     private var videoSurface: some View {
         Group {
-            if currentSource.isDASHSeparated {
+            if shouldUseNativePlayer {
                 AVFoundationDASHPlayerView(
                     source: currentSource,
                     playbackState: playbackState,
@@ -298,6 +298,14 @@ struct BilibiliVLCPlayerView: View {
             .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .padding(.horizontal, 12)
             .padding(.top, 6)
+    }
+
+    private var shouldUseNativePlayer: Bool {
+        currentSource.isDASHSeparated || (currentSource.quality ?? 0) <= 80
+    }
+
+    private var shouldUseCustomControls: Bool {
+        !shouldUseNativePlayer
     }
 
     private func debugText(base: String) -> String {
@@ -482,8 +490,7 @@ struct BilibiliVLCPlayerView: View {
 
     @MainActor
     private func switchQuality(to option: VideoQualityOption) async {
-        if option.quality == currentSource.quality,
-           !(option.quality == 80 && currentSource.isDASHSeparated) {
+        if option.quality == currentSource.quality {
             showControlsTemporarily()
             return
         }
