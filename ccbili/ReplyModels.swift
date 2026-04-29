@@ -15,6 +15,9 @@ struct ReplyItemDTO: Decodable {
     let ctime: Int?
     let content: ReplyContentDTO?
     let member: ReplyMemberDTO?
+    let like: Int?
+    let rcount: Int?
+    let replies: [ReplyItemDTO]?
 }
 
 struct ReplyContentDTO: Decodable {

@@ -10,6 +10,28 @@ struct VideoDetailResponseDTO: Decodable {
     let ctime: Int?
     let owner: VideoDetailOwnerDTO?
     let pages: [VideoDetailPageDTO]?
+    let stat: VideoDetailStatDTO?
+    let reqUser: VideoDetailReqUserDTO?
+
+    enum CodingKeys: String, CodingKey {
+        case bvid, aid, cid, title, desc, pubdate, ctime, owner, pages, stat
+        case reqUser = "req_user"
+    }
+}
+
+struct VideoDetailStatDTO: Decodable {
+    let view: Int?
+    let like: Int?
+    let coin: Int?
+    let favorite: Int?
+    let share: Int?
+}
+
+struct VideoDetailReqUserDTO: Decodable {
+    let attention: Int?
+    let favorite: Int?
+    let like: Int?
+    let coin: Int?
 }
 
 struct VideoDetailOwnerDTO: Decodable {

@@ -36,6 +36,7 @@ struct BilibiliVLCPlayerView: View {
     @State private var pendingSeekPosition: Double?
     @State private var surfaceID = UUID()
     @State private var hlsDiagnosticsText = HLSPlaybackDiagnostics.shared.summary
+    @State private var didCopyDiagnostics = false
     @State private var didReceiveFirstProgress = false
     @State private var seekResumePlayback = false
     @State private var hasAppeared = false
@@ -285,19 +286,31 @@ struct BilibiliVLCPlayerView: View {
     }
 
     private func debugOverlay(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
-            .foregroundStyle(.yellow.opacity(0.95))
-            .lineLimit(8)
-            .minimumScaleFactor(0.65)
-            .multilineTextAlignment(.leading)
-            .truncationMode(.tail)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .padding(.horizontal, 12)
-            .padding(.top, 6)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(text)
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundStyle(.yellow.opacity(0.95))
+                .lineLimit(8)
+                .minimumScaleFactor(0.65)
+                .multilineTextAlignment(.leading)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                UIPasteboard.general.string = text
+                didCopyDiagnostics = true
+            } label: {
+                Label(didCopyDiagnostics ? "已复制诊断信息" : "复制诊断信息", systemImage: didCopyDiagnostics ? "checkmark" : "doc.on.doc")
+                    .font(.caption2.weight(.semibold))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.top, 6)
     }
 
     private var shouldUseNativePlayer: Bool {
@@ -309,8 +322,13 @@ struct BilibiliVLCPlayerView: View {
     }
 
     private func debugText(base: String) -> String {
-        guard base.contains("DASH-to-HLS") else { return base }
-        return "\(base)\n\(hlsDiagnosticsText)"
+        let cookieStatus = BilibiliCookieStore.cookieHeader()?.contains("SESSDATA=") == true ? "logged-in" : "guest"
+        let quality = currentSource.qualityDescription ?? String(currentSource.quality ?? 0)
+        let codec = currentSource.videoCodec ?? "unknown"
+        let audioCodec = currentSource.audioCodec ?? "none"
+        let prefix = "quality=\(quality) video=\(codec) audio=\(audioCodec) cookie=\(cookieStatus)"
+        guard base.contains("DASH-to-HLS") else { return "\(prefix)\n\(base)" }
+        return "\(prefix)\n\(base)\n\(hlsDiagnosticsText)"
     }
 
     private var qualityMenu: some View {

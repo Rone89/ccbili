@@ -20,6 +20,8 @@ final class VideoDetailViewModel {
     var playURL: URL?
     var playbackSource: PlayableVideoSource?
     var playbackFallbackMessage: String?
+    var stats = VideoInteractionStats()
+    var viewerState = VideoViewerInteractionState()
 
     private let replyService = ReplyService()
     private let playURLCache = PlayURLCache.shared
@@ -74,6 +76,8 @@ final class VideoDetailViewModel {
 
             descriptionText = detailData.desc ?? "暂无简介"
             uploadTimeText = formatUploadTime(from: detailData.pubdate ?? detailData.ctime)
+            stats = VideoInteractionStats(stat: detailData.stat)
+            viewerState = VideoViewerInteractionState(reqUser: detailData.reqUser)
 
             let resolvedCID = detailData.cid ?? detailData.pages?.first?.cid
             let ownerMID = detailData.owner?.mid
@@ -345,5 +349,37 @@ final class VideoDetailViewModel {
         }
 
         return URL(string: path)
+    }
+}
+
+struct VideoInteractionStats: Equatable {
+    var views: Int?
+    var likes: Int?
+    var coins: Int?
+    var favorites: Int?
+    var shares: Int?
+
+    init() {}
+
+    init(stat: VideoDetailStatDTO?) {
+        views = stat?.view
+        likes = stat?.like
+        coins = stat?.coin
+        favorites = stat?.favorite
+        shares = stat?.share
+    }
+}
+
+struct VideoViewerInteractionState: Equatable {
+    var didLike = false
+    var didCoin = false
+    var didFavorite = false
+
+    init() {}
+
+    init(reqUser: VideoDetailReqUserDTO?) {
+        didLike = (reqUser?.like ?? 0) > 0
+        didCoin = (reqUser?.coin ?? 0) > 0
+        didFavorite = (reqUser?.favorite ?? 0) > 0
     }
 }

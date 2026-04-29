@@ -22,6 +22,8 @@ struct VideoDetailView: View {
     @State private var selectedTab: DetailTab = .intro
     @State private var commentSortMode: CommentSortMode = .hot
     @State private var isVideoPlaying = false
+    @State private var restoredPlaybackPosition: Double?
+    @State private var lastSavedPlaybackSecond = 0
 
     private let biliPink = Color(red: 251 / 255, green: 114 / 255, blue: 153 / 255)
     private let replyService = ReplyService()
@@ -71,6 +73,10 @@ struct VideoDetailView: View {
         .onAppear {
             UIDevice.current.beginGeneratingDeviceOrientationNotifications()
             AppOrientationController.lock(.portrait)
+            if let history = VideoPlaybackHistoryStore.history(for: viewModel.playbackItem.id) {
+                restoredPlaybackPosition = history.position
+                playbackPosition = history.position
+            }
         }
         .task {
             favoriteViewModel.load(videoID: viewModel.playbackItem.id)
@@ -78,6 +84,9 @@ struct VideoDetailView: View {
             if !viewModel.hasLoadedContent {
                 await viewModel.load()
                 favoriteViewModel.load(videoID: viewModel.playbackItem.id)
+                didLike = viewModel.viewerState.didLike
+                didCoin = viewModel.viewerState.didCoin
+                favoriteViewModel.isFavorite = viewModel.viewerState.didFavorite
             } else {
                 configurePlayer(for: viewModel.playURL)
             }
@@ -99,6 +108,7 @@ struct VideoDetailView: View {
             }
         }
         .onDisappear {
+            savePlaybackHistoryIfNeeded()
             configurePlayer(for: nil)
             AppOrientationController.lock(.portrait)
         }
@@ -118,9 +128,10 @@ struct VideoDetailView: View {
             BilibiliVLCPlayerView(
                 source: source,
                 enablesAutoFullscreen: false,
-                initialPosition: playbackPosition,
+                initialPosition: restoredPlaybackPosition ?? playbackPosition,
                 onPositionChange: { position in
                     playbackPosition = position
+                    savePlaybackHistoryIfNeeded()
                 },
                 onPlaybackStateChange: { isPlaying in
                     isVideoPlaying = isPlaying
@@ -279,7 +290,7 @@ struct VideoDetailView: View {
                 .textSelection(.enabled)
 
             HStack(spacing: 8) {
-                metaChip(systemImage: "play.rectangle", text: "播放数待接入")
+                metaChip(systemImage: "play.rectangle", text: statsText(viewModel.stats.views, fallback: "播放数待接入"))
                 metaChip(systemImage: "calendar", text: viewModel.uploadTimeText)
             }
 
@@ -296,6 +307,15 @@ struct VideoDetailView: View {
 
             if let fallbackMessage = viewModel.playbackFallbackMessage {
                 Label(fallbackMessage, systemImage: "arrow.down.circle")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
+            }
+
+            if let history = VideoPlaybackHistoryStore.history(for: viewModel.playbackItem.id) {
+                Label("上次看到 \(history.displayText)", systemImage: "clock.arrow.circlepath")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 10)
@@ -478,7 +498,7 @@ struct VideoDetailView: View {
     private var actionSection: some View {
         HStack(spacing: 10) {
             actionIconButton(
-                title: "收藏",
+                title: statsText(viewModel.stats.favorites, fallback: "收藏"),
                 systemImage: favoriteViewModel.isFavorite ? "star.fill" : "star",
                 tint: favoriteViewModel.isFavorite ? .yellow : .secondary,
                 isLoading: favoriteViewModel.isLoading
@@ -489,7 +509,7 @@ struct VideoDetailView: View {
             }
 
             actionIconButton(
-                title: "点赞",
+                title: statsText(viewModel.stats.likes, fallback: "点赞"),
                 systemImage: didLike ? "hand.thumbsup.fill" : "hand.thumbsup",
                 tint: didLike ? .blue : .secondary,
                 isLoading: isSubmittingLike
@@ -500,7 +520,7 @@ struct VideoDetailView: View {
             }
 
             actionIconButton(
-                title: "投币",
+                title: statsText(viewModel.stats.coins, fallback: "投币"),
                 systemImage: didCoin ? "bitcoinsign.circle.fill" : "bitcoinsign.circle",
                 tint: didCoin ? .yellow : .secondary,
                 isLoading: isSubmittingCoin
@@ -511,7 +531,7 @@ struct VideoDetailView: View {
             }
 
             actionIconButton(
-                title: "分享",
+                title: statsText(viewModel.stats.shares, fallback: "分享"),
                 systemImage: "square.and.arrow.up",
                 tint: .secondary,
                 isLoading: false
@@ -758,21 +778,37 @@ struct VideoDetailView: View {
                                     .font(.caption2)
                                     .foregroundStyle(.tertiary)
 
+                                if !comment.previewReplies.isEmpty {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        ForEach(comment.previewReplies, id: \.self) { reply in
+                                            Text("\(reply.username)：\(reply.message)")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(2)
+                                        }
+                                    }
+                                    .padding(10)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                }
+
                                 HStack(spacing: 16) {
                                     Label("回复", systemImage: "bubble.left")
                                         .font(.caption)
                                         .foregroundStyle(.tertiary)
 
-                                    Label("点赞", systemImage: "hand.thumbsup")
+                                    Label(statsText(comment.likeCount, fallback: "点赞"), systemImage: "hand.thumbsup")
                                         .font(.caption)
                                         .foregroundStyle(.tertiary)
 
                                     Spacer()
 
-                                    Button("查看其他回复") {
+                                    if comment.replyCount > 0 {
+                                        Button("查看 \(comment.replyCount) 条回复") {
+                                        }
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                     }
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
                                 }
                                 .padding(.top, 2)
                             }
@@ -980,6 +1016,7 @@ struct VideoDetailView: View {
         do {
             try await interactionService.like(aid: aid, like: true)
             didLike = true
+            viewModel.stats.likes = (viewModel.stats.likes ?? 0) + 1
         } catch {
             likeErrorMessage = error.localizedDescription
         }
@@ -1001,6 +1038,7 @@ struct VideoDetailView: View {
         do {
             try await interactionService.coin(aid: aid, multiply: 1, like: false)
             didCoin = true
+            viewModel.stats.coins = (viewModel.stats.coins ?? 0) + 1
         } catch {
             coinErrorMessage = error.localizedDescription
         }
@@ -1028,6 +1066,22 @@ struct VideoDetailView: View {
                 )
             ]
         }
+    }
+
+    private func savePlaybackHistoryIfNeeded() {
+        let currentSecond = Int(playbackPosition.rounded(.down))
+        guard abs(currentSecond - lastSavedPlaybackSecond) >= 5 else { return }
+        lastSavedPlaybackSecond = currentSecond
+        VideoPlaybackHistoryStore.save(videoID: viewModel.playbackItem.id, position: playbackPosition)
+    }
+
+    private func statsText(_ value: Int?, fallback: String) -> String {
+        guard let value else { return fallback }
+        if value >= 10_000 {
+            let number = Double(value) / 10_000
+            return String(format: "%.1f万", number)
+        }
+        return String(value)
     }
 
 }

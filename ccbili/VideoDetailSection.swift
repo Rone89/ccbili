@@ -13,6 +13,14 @@ struct VideoComment: Identifiable, Hashable {
     let userID: String?
     let avatarURL: URL?
     let timeText: String
+    var likeCount = 0
+    var replyCount = 0
+    var previewReplies: [VideoCommentPreviewReply] = []
+}
+
+struct VideoCommentPreviewReply: Hashable {
+    let username: String
+    let message: String
 }
 
 struct RelatedVideo: Identifiable, Hashable {

@@ -34,7 +34,15 @@ struct ReplyService {
                 message: reply.content?.message ?? "",
                 userID: reply.member?.mid,
                 avatarURL: normalizedImageURL(from: reply.member?.avatar),
-                timeText: formattedCommentTime(from: reply.ctime)
+                timeText: formattedCommentTime(from: reply.ctime),
+                likeCount: reply.like ?? 0,
+                replyCount: reply.rcount ?? reply.replies?.count ?? 0,
+                previewReplies: (reply.replies ?? []).prefix(2).map { child in
+                    VideoCommentPreviewReply(
+                        username: child.member?.uname ?? "未知用户",
+                        message: child.content?.message ?? ""
+                    )
+                }
             )
         }
 
