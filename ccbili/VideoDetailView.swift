@@ -812,7 +812,11 @@ struct VideoDetailView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(alignment: .top, spacing: 10) {
                             NavigationLink {
-                                UserSpaceWebView(userID: comment.userID, username: comment.username)
+                                if let mid = Int(comment.userID ?? "") {
+                                    UserProfileView(mid: mid, username: comment.username)
+                                } else {
+                                    UserSpaceWebView(userID: comment.userID, username: comment.username)
+                                }
                             } label: {
                                 AsyncImage(url: comment.avatarURL) { phase in
                                     switch phase {
@@ -846,7 +850,11 @@ struct VideoDetailView: View {
 
                             VStack(alignment: .leading, spacing: 6) {
                                 NavigationLink {
-                                    UserSpaceWebView(userID: comment.userID, username: comment.username)
+                                    if let mid = Int(comment.userID ?? "") {
+                                        UserProfileView(mid: mid, username: comment.username)
+                                    } else {
+                                        UserSpaceWebView(userID: comment.userID, username: comment.username)
+                                    }
                                 } label: {
                                     Text(comment.username)
                                         .font(.callout.weight(.semibold))

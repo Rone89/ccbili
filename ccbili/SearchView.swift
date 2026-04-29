@@ -16,6 +16,7 @@ struct SearchView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 searchBar
+                scopePicker
                 searchHistorySection
                 loadingSection
                 errorSection
@@ -33,6 +34,15 @@ struct SearchView: View {
                 await viewModel.search()
             }
         }
+    }
+
+    private var scopePicker: some View {
+        Picker("搜索类型", selection: $viewModel.scope) {
+            ForEach(SearchViewModel.Scope.allCases) { scope in
+                Text(scope.rawValue).tag(scope)
+            }
+        }
+        .pickerStyle(.segmented)
     }
 
     private var searchBar: some View {
@@ -118,8 +128,9 @@ struct SearchView: View {
                 Text("搜索结果")
                     .font(.headline)
 
-                if viewModel.hasSearched && !viewModel.results.isEmpty {
-                    Text("\(viewModel.results.count) 条")
+                let resultCount = viewModel.scope == .videos ? viewModel.results.count : viewModel.userResults.count
+                if viewModel.hasSearched && resultCount > 0 {
+                    Text("\(resultCount) 条")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -127,7 +138,7 @@ struct SearchView: View {
                 Spacer()
             }
 
-            if !viewModel.hasSearched && viewModel.results.isEmpty {
+            if !viewModel.hasSearched && viewModel.results.isEmpty && viewModel.userResults.isEmpty {
                 ContentUnavailableView(
                     "输入关键词开始搜索",
                     systemImage: "magnifyingglass",
@@ -135,7 +146,7 @@ struct SearchView: View {
                 )
                 .frame(maxWidth: .infinity)
                 .padding(.top, 16)
-            } else if !viewModel.isLoading && viewModel.results.isEmpty {
+            } else if !viewModel.isLoading && activeResultsAreEmpty {
                 ContentUnavailableView(
                     "暂无搜索结果",
                     systemImage: "magnifyingglass",
@@ -143,45 +154,135 @@ struct SearchView: View {
                 )
                 .frame(maxWidth: .infinity)
                 .padding(.top, 16)
+            } else if viewModel.scope == .users {
+                usersResultList
             } else {
-                LazyVGrid(columns: columns, spacing: 18) {
-                    ForEach(viewModel.results) { item in
-                        NavigationLink {
-                            VideoDetailView(item: item)
-                        } label: {
-                            VideoListRowView(
-                                title: item.title,
-                                subtitle: item.subtitle,
-                                accessoryText: item.bvid,
-                                coverURL: item.coverURL
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .task {
-                            await viewModel.loadMoreIfNeeded(currentItem: item)
-                        }
-                    }
-                }
-
-                if viewModel.isLoadingMore {
-                    HStack(spacing: 10) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("正在加载更多结果...")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
-                } else if viewModel.hasSearched && !viewModel.canLoadMore && !viewModel.results.isEmpty {
-                    Text("没有更多结果了")
-                        .font(.footnote)
-                        .foregroundStyle(.tertiary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, 8)
-                }
+                videosResultGrid
             }
         }
+    }
+
+    private var activeResultsAreEmpty: Bool {
+        switch viewModel.scope {
+        case .videos:
+            return viewModel.results.isEmpty
+        case .users:
+            return viewModel.userResults.isEmpty
+        }
+    }
+
+    private var videosResultGrid: some View {
+        VStack(spacing: 12) {
+            LazyVGrid(columns: columns, spacing: 18) {
+                ForEach(viewModel.results) { item in
+                    NavigationLink {
+                        VideoDetailView(item: item)
+                    } label: {
+                        VideoListRowView(
+                            title: item.title,
+                            subtitle: item.subtitle,
+                            accessoryText: item.bvid,
+                            coverURL: item.coverURL
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .task {
+                        await viewModel.loadMoreIfNeeded(currentItem: item)
+                    }
+                }
+            }
+
+            paginationFooter(isEmpty: viewModel.results.isEmpty)
+        }
+    }
+
+    private var usersResultList: some View {
+        VStack(spacing: 12) {
+            ForEach(viewModel.userResults) { user in
+                NavigationLink {
+                    UserProfileView(user: user)
+                } label: {
+                    userResultRow(user)
+                }
+                .buttonStyle(.plain)
+                .task {
+                    await viewModel.loadMoreUsersIfNeeded(currentItem: user)
+                }
+            }
+
+            paginationFooter(isEmpty: viewModel.userResults.isEmpty)
+        }
+    }
+
+    @ViewBuilder
+    private func paginationFooter(isEmpty: Bool) -> some View {
+        if viewModel.isLoadingMore {
+            HStack(spacing: 10) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("正在加载更多结果...")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, 8)
+        } else if viewModel.hasSearched && !viewModel.canLoadMore && !isEmpty {
+            Text("没有更多结果了")
+                .font(.footnote)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 8)
+        }
+    }
+
+    private func userResultRow(_ user: SearchUserItem) -> some View {
+        HStack(spacing: 12) {
+            RemoteImageView(
+                url: user.avatarURL,
+                placeholder: {
+                    Circle()
+                        .fill(Color(.tertiarySystemGroupedBackground))
+                        .overlay { ProgressView().controlSize(.small) }
+                },
+                failureView: { _ in
+                    Circle()
+                        .fill(Color(.tertiarySystemGroupedBackground))
+                        .overlay {
+                            Image(systemName: "person.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                }
+            )
+            .frame(width: 52, height: 52)
+            .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(user.name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Text(user.sign)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                HStack(spacing: 8) {
+                    Text(user.followerText)
+                    Text(user.videoText)
+                }
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var historyTagsView: some View {

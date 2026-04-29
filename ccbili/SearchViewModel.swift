@@ -3,12 +3,21 @@ import Observation
 
 @Observable
 final class SearchViewModel {
+    enum Scope: String, CaseIterable, Identifiable {
+        case videos = "视频"
+        case users = "用户"
+
+        var id: String { rawValue }
+    }
+
     var keyword = ""
+    var scope: Scope = .videos
     var isLoading = false
     var isLoadingMore = false
     var errorMessage: String?
     var searchHistory: [String] = []
     var results: [VideoItem] = []
+    var userResults: [SearchUserItem] = []
     var hasSearched = false
     var canLoadMore = false
 
@@ -26,6 +35,7 @@ final class SearchViewModel {
 
         guard !trimmed.isEmpty else {
             results = []
+            userResults = []
             hasSearched = false
             canLoadMore = false
             errorMessage = "请输入关键词"
@@ -44,19 +54,35 @@ final class SearchViewModel {
         }
 
         do {
-            let page = try await searchService.searchVideos(keyword: trimmed, page: 1)
-            results = page.items
-            currentPage = page.page
-            canLoadMore = page.hasMore
+            switch scope {
+            case .videos:
+                let page = try await searchService.searchVideos(keyword: trimmed, page: 1)
+                results = page.items
+                userResults = []
+                currentPage = page.page
+                canLoadMore = page.hasMore
+            case .users:
+                let page = try await searchService.searchUsers(keyword: trimmed, page: 1)
+                userResults = page.items
+                results = []
+                currentPage = page.page
+                canLoadMore = page.hasMore
+            }
             saveHistoryKeyword(trimmed)
         } catch {
             errorMessage = error.localizedDescription
             results = []
+            userResults = []
         }
     }
 
     func loadMoreIfNeeded(currentItem: VideoItem) async {
-        guard currentItem.id == results.last?.id else { return }
+        guard scope == .videos, currentItem.id == results.last?.id else { return }
+        await loadMore()
+    }
+
+    func loadMoreUsersIfNeeded(currentItem: SearchUserItem) async {
+        guard scope == .users, currentItem.id == userResults.last?.id else { return }
         await loadMore()
     }
 
@@ -71,11 +97,20 @@ final class SearchViewModel {
         }
 
         do {
-            let page = try await searchService.searchVideos(keyword: currentKeyword, page: currentPage + 1)
-            let existingIDs = Set(results.map(\.id))
-            results.append(contentsOf: page.items.filter { !existingIDs.contains($0.id) })
-            currentPage = page.page
-            canLoadMore = page.hasMore
+            switch scope {
+            case .videos:
+                let page = try await searchService.searchVideos(keyword: currentKeyword, page: currentPage + 1)
+                let existingIDs = Set(results.map(\.id))
+                results.append(contentsOf: page.items.filter { !existingIDs.contains($0.id) })
+                currentPage = page.page
+                canLoadMore = page.hasMore
+            case .users:
+                let page = try await searchService.searchUsers(keyword: currentKeyword, page: currentPage + 1)
+                let existingIDs = Set(userResults.map(\.id))
+                userResults.append(contentsOf: page.items.filter { !existingIDs.contains($0.id) })
+                currentPage = page.page
+                canLoadMore = page.hasMore
+            }
         } catch {
             errorMessage = "更多结果加载失败：\(error.localizedDescription)"
         }

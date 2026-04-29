@@ -7,6 +7,12 @@ struct SearchService {
         let hasMore: Bool
     }
 
+    struct UserSearchPage {
+        let items: [SearchUserItem]
+        let page: Int
+        let hasMore: Bool
+    }
+
     func searchAll(keyword: String, page: Int = 1) async throws -> [VideoItem] {
         try await searchVideos(keyword: keyword, page: page).items
     }
@@ -73,12 +79,64 @@ struct SearchService {
         return SearchPage(items: items, page: currentPage, hasMore: currentPage < numPages)
     }
 
+    func searchUsers(keyword: String, page: Int = 1) async throws -> UserSearchPage {
+        let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return UserSearchPage(items: [], page: page, hasMore: false)
+        }
+
+        var components = URLComponents(
+            url: AppConfig.apiBaseURL.appending(path: "/x/web-interface/wbi/search/type"),
+            resolvingAgainstBaseURL: false
+        )
+
+        let queryItems = try await WBI.shared.signedQueryItems(from: [
+            "keyword": trimmed,
+            "page": String(page),
+            "search_type": "bili_user"
+        ])
+        components?.queryItems = queryItems
+
+        guard let url = components?.url else {
+            throw APIError.invalidURL
+        }
+
+        let response = try await APIClient.shared.get(url: url, as: SearchUserResponseDTO.self)
+        guard response.code == 0 else {
+            throw APIError.serverMessage(response.message)
+        }
+
+        let items = (response.data?.result ?? []).compactMap { item -> SearchUserItem? in
+            guard let mid = item.mid else { return nil }
+            return SearchUserItem(
+                id: String(mid),
+                mid: mid,
+                name: cleanSearchText(item.uname ?? "未知用户"),
+                sign: cleanSearchText(item.usign ?? "这个人还没有签名"),
+                followerText: "粉丝 \(formattedCount(item.fans ?? 0))",
+                videoText: "投稿 \(formattedCount(item.videos ?? 0))",
+                avatarURL: normalizedImageURL(from: item.upic)
+            )
+        }
+
+        let currentPage = response.data?.page ?? page
+        let numPages = response.data?.numPages ?? currentPage
+        return UserSearchPage(items: items, page: currentPage, hasMore: currentPage < numPages)
+    }
+
     private func cleanSearchText(_ text: String) -> String {
         text
             .replacingOccurrences(of: "<em class=\"keyword\">", with: "")
             .replacingOccurrences(of: "</em>", with: "")
             .replacingOccurrences(of: "&quot;", with: "\"")
             .replacingOccurrences(of: "&amp;", with: "&")
+    }
+
+    private func formattedCount(_ value: Int) -> String {
+        if value >= 10_000 {
+            return String(format: "%.1f万", Double(value) / 10_000)
+        }
+        return String(value)
     }
 
     private func normalizedImageURL(from path: String?) -> URL? {
