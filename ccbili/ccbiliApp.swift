@@ -20,7 +20,7 @@ struct ccbiliApp: App {
     }
 }
 
-struct OrientationRootView: UIViewControllerRepresentable {
+private struct OrientationRootView: UIViewControllerRepresentable {
     let authManager: AuthManager
     let scenePhase: ScenePhase
 
@@ -38,7 +38,7 @@ struct OrientationRootView: UIViewControllerRepresentable {
     }
 }
 
-struct RootContentView: View {
+private struct RootContentView: View {
     let authManager: AuthManager
     let scenePhase: ScenePhase
 
