@@ -419,7 +419,7 @@ struct VideoDetailView: View {
             }
             .foregroundStyle(.primary)
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .frame(height: 34)
             .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
         }
         .buttonStyle(.plain)
@@ -591,13 +591,18 @@ struct VideoDetailView: View {
                 }
             }
 
-            actionIconButton(
-                title: statsText(viewModel.stats.shares, fallback: "分享"),
-                systemImage: "square.and.arrow.up",
-                tint: .secondary,
-                isLoading: false
-            ) {
+            ShareLink(item: shareURL) {
+                actionIconLabel(
+                    systemImage: "square.and.arrow.up",
+                    tint: .secondary,
+                    isLoading: false
+                )
             }
+            .buttonStyle(.plain)
+            .simultaneousGesture(TapGesture().onEnded {
+                viewModel.stats.shares = (viewModel.stats.shares ?? 0) + 1
+            })
+            .accessibilityLabel(statsText(viewModel.stats.shares, fallback: "分享"))
         }
         .frame(maxWidth: .infinity)
     }
@@ -1006,32 +1011,50 @@ struct VideoDetailView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            ZStack {
-                if isLoading {
-                    ProgressView()
-                        .controlSize(.regular)
-                } else {
-                    Image(systemName: systemImage)
-                        .font(.system(size: 20, weight: .semibold))
-                        .symbolRenderingMode(.hierarchical)
-                }
-            }
-            .foregroundStyle(tint)
-            .frame(maxWidth: .infinity)
-            .frame(height: 48)
-            .background(
-                Color(.secondarySystemGroupedBackground),
-                in: RoundedRectangle(cornerRadius: 15, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 15, style: .continuous)
-                    .strokeBorder(Color(.separator).opacity(0.08), lineWidth: 0.5)
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+            actionIconLabel(systemImage: systemImage, tint: tint, isLoading: isLoading)
         }
         .buttonStyle(.plain)
         .disabled(isLoading)
         .accessibilityLabel(title)
+    }
+
+    private func actionIconLabel(systemImage: String, tint: Color, isLoading: Bool) -> some View {
+        ZStack {
+            if isLoading {
+                ProgressView()
+                    .controlSize(.regular)
+            } else {
+                Image(systemName: systemImage)
+                    .font(.system(size: 20, weight: .semibold))
+                    .symbolRenderingMode(.hierarchical)
+            }
+        }
+        .foregroundStyle(tint)
+        .frame(maxWidth: .infinity)
+        .frame(height: 48)
+        .background(
+            Color(.secondarySystemGroupedBackground),
+            in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .strokeBorder(Color(.separator).opacity(0.08), lineWidth: 0.5)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+    }
+
+    private var shareURL: URL {
+        if let bvid = viewModel.playbackItem.resolvedBVID,
+           let url = URL(string: "https://www.bilibili.com/video/\(bvid)") {
+            return url
+        }
+
+        if let aid = viewModel.playbackItem.aid,
+           let url = URL(string: "https://www.bilibili.com/video/av\(aid)") {
+            return url
+        }
+
+        return AppConfig.webBaseURL
     }
 
     private func metaChip(systemImage: String, text: String) -> some View {
@@ -1039,7 +1062,7 @@ struct VideoDetailView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 8)
-            .padding(.vertical, 5)
+            .frame(height: 34)
             .background(
                 Color(.tertiarySystemGroupedBackground),
                 in: Capsule()
@@ -1075,7 +1098,11 @@ struct VideoDetailView: View {
     // MARK: - Actions
 
     private func favoriteCurrentVideo() async {
+        let wasFavorite = favoriteViewModel.isFavorite
         await favoriteViewModel.favorite(video: viewModel.playbackItem)
+        if !wasFavorite && favoriteViewModel.isFavorite {
+            viewModel.stats.favorites = (viewModel.stats.favorites ?? 0) + 1
+        }
     }
 
     private func likeCurrentVideo() async {

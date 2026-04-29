@@ -238,6 +238,27 @@ struct BilibiliVLCPlayerView: View {
 
     private var controlsOverlay: some View {
         ZStack {
+            HStack(spacing: 34) {
+                glassPlayerButton(systemImage: "gobackward.10") {
+                    commandCenter.seek(to: max(playbackState.position - 0.035, 0), resumePlayback: playbackState.isPlaying)
+                    showControlsTemporarily()
+                }
+
+                glassPlayerButton(
+                    systemImage: playbackState.isPlaying ? "pause.fill" : "play.fill",
+                    size: 82,
+                    fontSize: 38
+                ) {
+                    commandCenter.togglePlay()
+                    showControlsTemporarily()
+                }
+
+                glassPlayerButton(systemImage: "goforward.10") {
+                    commandCenter.seek(to: min(playbackState.position + 0.035, 1), resumePlayback: playbackState.isPlaying)
+                    showControlsTemporarily()
+                }
+            }
+
             VStack(spacing: 0) {
                 topControls
 
@@ -263,7 +284,7 @@ struct BilibiliVLCPlayerView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 34, height: 34)
-                    .background(.ultraThinMaterial, in: Circle())
+                    .liquidGlassCircle(interactive: true)
             }
             .buttonStyle(.plain)
 
@@ -285,7 +306,7 @@ struct BilibiliVLCPlayerView: View {
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.white)
                         .frame(width: 34, height: 34)
-                        .background(.ultraThinMaterial, in: Circle())
+                        .liquidGlassCircle(interactive: true)
                 }
                 .buttonStyle(.plain)
             }
@@ -327,7 +348,7 @@ struct BilibiliVLCPlayerView: View {
     }
 
     private var shouldUseCustomControls: Bool {
-        !shouldUseNativePlayer
+        true
     }
 
     private func debugText(base: String) -> String {
@@ -381,6 +402,22 @@ struct BilibiliVLCPlayerView: View {
         )
     }
 
+    private func glassPlayerButton(
+        systemImage: String,
+        size: CGFloat = 60,
+        fontSize: CGFloat = 25,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: fontSize, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: size, height: size)
+                .liquidGlassCircle(interactive: true)
+        }
+        .buttonStyle(.plain)
+    }
+
     private var bottomProgressControls: some View {
         VStack(spacing: 6) {
             HStack(spacing: 8) {
@@ -423,7 +460,7 @@ struct BilibiliVLCPlayerView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .liquidGlassCapsule(cornerRadius: 22, interactive: true)
         .padding(.horizontal, 10)
         .padding(.bottom, 10)
     }
@@ -785,7 +822,7 @@ private struct FullscreenPlayerOverlay: View {
                                 .font(.system(size: 17, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .frame(width: 42, height: 42)
-                                .background(.white.opacity(0.16), in: Circle())
+                                .liquidGlassCircle(interactive: true)
                         }
                         .buttonStyle(.plain)
 
@@ -805,7 +842,7 @@ private struct FullscreenPlayerOverlay: View {
                                 .font(.system(size: 17, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .frame(width: 42, height: 42)
-                                .background(.white.opacity(0.16), in: Circle())
+                                .liquidGlassCircle(interactive: true)
                         }
                         .buttonStyle(.plain)
                     }
@@ -838,6 +875,7 @@ private struct FullscreenPlayerOverlay: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 24)
+                    .liquidGlassCapsule(cornerRadius: 24, interactive: true)
                 }
                 .rotationEffect(rotationAngle)
                 .frame(width: proxy.size.height, height: proxy.size.width)
@@ -1104,6 +1142,34 @@ final class AVPlayerContainerView: UIView {
 
     var playerLayer: AVPlayerLayer {
         layer as! AVPlayerLayer
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func liquidGlassCircle(interactive: Bool = false) -> some View {
+        if #available(iOS 26, *) {
+            if interactive {
+                self.glassEffect(.regular.interactive(), in: .rect(cornerRadius: 999))
+            } else {
+                self.glassEffect(.regular, in: .rect(cornerRadius: 999))
+            }
+        } else {
+            self.background(.ultraThinMaterial, in: Circle())
+        }
+    }
+
+    @ViewBuilder
+    func liquidGlassCapsule(cornerRadius: CGFloat, interactive: Bool = false) -> some View {
+        if #available(iOS 26, *) {
+            if interactive {
+                self.glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
+            } else {
+                self.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+            }
+        } else {
+            self.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        }
     }
 }
 
