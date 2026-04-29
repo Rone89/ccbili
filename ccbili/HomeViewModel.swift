@@ -88,7 +88,11 @@ final class HomeViewModel {
               let cid = item.cid else {
             return
         }
-        await PlayURLCache.shared.warm(bvid: bvid, cid: cid)
+        await PlayURLCache.shared.warm(
+            bvid: bvid,
+            cid: cid,
+            preferredQuality: PlaybackPreferences.preferredQuality
+        )
     }
 
     private func fetchRecommendations() async throws -> [VideoItem] {

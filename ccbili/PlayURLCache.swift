@@ -50,6 +50,13 @@ actor PlayURLCache {
         }
     }
 
+    func remove(bvid: String, cid: Int, preferredQuality: Int? = nil) {
+        let key = cacheKey(bvid: bvid, cid: cid, preferredQuality: preferredQuality)
+        values[key] = nil
+        tasks[key]?.cancel()
+        tasks[key] = nil
+    }
+
     private func cacheKey(bvid: String, cid: Int, preferredQuality: Int?) -> String {
         "\(bvid)-\(cid)-\(preferredQuality ?? 112)"
     }

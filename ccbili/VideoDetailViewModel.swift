@@ -19,6 +19,7 @@ final class VideoDetailViewModel {
     var playbackItem: VideoItem
     var playURL: URL?
     var playbackSource: PlayableVideoSource?
+    var playbackFallbackMessage: String?
 
     private let replyService = ReplyService()
     private let playURLCache = PlayURLCache.shared
@@ -93,39 +94,16 @@ final class VideoDetailViewModel {
                 cid: resolvedCID
             )
 
-            author = await buildAuthor(
+            async let loadedAuthor = buildAuthor(
                 mid: ownerMID,
                 fallbackName: ownerName,
                 fallbackAvatarURL: ownerFaceURL
             )
 
-            if let aid = detailData.aid {
-                do {
-                    comments = try await replyService.fetchVideoReplies(oid: aid, type: 1, sort: 1)
-                } catch {
-                    comments = [
-                        VideoComment(
-                            id: "comment-load-failed",
-                            username: "系统提示",
-                            message: "评论加载失败：\(error.localizedDescription)",
-                            userID: nil,
-                            avatarURL: nil,
-                            timeText: "时间未知"
-                        )
-                    ]
-                }
-            } else {
-                comments = [
-                    VideoComment(
-                        id: "comment-no-aid",
-                        username: "系统提示",
-                        message: "缺少 aid，暂时无法加载评论",
-                        userID: nil,
-                        avatarURL: nil,
-                        timeText: "时间未知"
-                    )
-                ]
-            }
+            async let loadedComments = loadComments(aid: detailData.aid)
+
+            author = await loadedAuthor
+            comments = await loadedComments
 
             let related = try await relatedResponse
             if related.code == 0 {
@@ -166,17 +144,24 @@ final class VideoDetailViewModel {
 
         isLoadingPlaybackSource = true
         playbackErrorMessage = nil
+        playbackFallbackMessage = nil
 
         Task { [playURLCache] in
             do {
-                let source = try await playURLCache.source(
+                let preferredQuality = PlaybackPreferences.preferredQuality
+                let source = try await Self.fetchPlayableSourceWithFallback(
                     bvid: resolvedBVID,
-                    cid: resolvedCID
+                    cid: resolvedCID,
+                    preferredQuality: preferredQuality,
+                    playURLCache: playURLCache
                 )
 
                 await MainActor.run {
                     self.playbackSource = source
                     self.playURL = source.url
+                    if source.quality != preferredQuality {
+                        self.playbackFallbackMessage = "已自动切换到\(source.qualityDescription ?? "可播放清晰度")"
+                    }
                     self.isLoadingPlaybackSource = false
                 }
             } catch {
@@ -188,6 +173,41 @@ final class VideoDetailViewModel {
                 }
             }
         }
+    }
+
+    private static func fetchPlayableSourceWithFallback(
+        bvid: String,
+        cid: Int,
+        preferredQuality: Int,
+        playURLCache: PlayURLCache
+    ) async throws -> PlayableVideoSource {
+        let candidates = fallbackQualities(startingWith: preferredQuality)
+        var lastError: Error?
+
+        for quality in candidates {
+            do {
+                let source = try await playURLCache.source(
+                    bvid: bvid,
+                    cid: cid,
+                    preferredQuality: quality
+                )
+                if let selectedQuality = source.quality {
+                    PlaybackPreferences.savePreferredQuality(selectedQuality)
+                }
+                return source
+            } catch {
+                lastError = error
+                await playURLCache.remove(bvid: bvid, cid: cid, preferredQuality: quality)
+            }
+        }
+
+        throw lastError ?? APIError.serverMessage("未获取到可播放的视频地址")
+    }
+
+    private static func fallbackQualities(startingWith preferredQuality: Int) -> [Int] {
+        var qualities = [preferredQuality]
+        qualities.append(contentsOf: [112, 116, 80, 64, 32, 16].filter { $0 != preferredQuality })
+        return qualities
     }
 
     private func buildDetailURL(bvid: String) throws -> URL {
@@ -218,6 +238,36 @@ final class VideoDetailViewModel {
             throw APIError.invalidURL
         }
         return url
+    }
+
+    private func loadComments(aid: Int?) async -> [VideoComment] {
+        guard let aid else {
+            return [
+                VideoComment(
+                    id: "comment-no-aid",
+                    username: "系统提示",
+                    message: "缺少 aid，暂时无法加载评论",
+                    userID: nil,
+                    avatarURL: nil,
+                    timeText: "时间未知"
+                )
+            ]
+        }
+
+        do {
+            return try await replyService.fetchVideoReplies(oid: aid, type: 1, sort: 1)
+        } catch {
+            return [
+                VideoComment(
+                    id: "comment-load-failed",
+                    username: "系统提示",
+                    message: "评论加载失败：\(error.localizedDescription)",
+                    userID: nil,
+                    avatarURL: nil,
+                    timeText: "时间未知"
+                )
+            ]
+        }
     }
 
     private func buildAuthor(mid: Int?, fallbackName: String, fallbackAvatarURL: URL?) async -> VideoAuthor {

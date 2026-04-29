@@ -509,6 +509,9 @@ struct BilibiliVLCPlayerView: View {
             )
 
             currentSource = newSource
+            if let selectedQuality = newSource.quality {
+                PlaybackPreferences.savePreferredQuality(selectedQuality)
+            }
             playbackState.resetForNewMedia()
             didReceiveFirstProgress = false
             surfaceID = UUID()
