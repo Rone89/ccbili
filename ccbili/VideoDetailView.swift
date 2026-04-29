@@ -47,42 +47,41 @@ struct VideoDetailView: View {
             let contentWidth = max(proxy.size.width - pageHorizontalInset * 2, 0)
             let playerWidth = proxy.size.width
             let playerHeight = min(playerWidth / videoAspectRatio, proxy.size.height * 0.7)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    playerCardSection(height: playerHeight)
-                        .frame(width: playerWidth)
-                        .padding(.horizontal, -pageHorizontalInset)
-                        .offset(y: pinnedVideoOffset)
-                        .zIndex(isVideoPlaying ? 10 : 0)
-                        .background(
-                            GeometryReader { playerProxy in
-                                Color.clear.preference(
-                                    key: VideoDetailPlayerMinYPreferenceKey.self,
-                                    value: playerProxy.frame(in: .named("videoDetailScroll")).minY
-                                )
-                            }
-                        )
+            ZStack(alignment: .top) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        playerPlaceholder(height: playerHeight)
+                            .frame(width: playerWidth)
+                            .padding(.horizontal, -pageHorizontalInset)
 
-                    videoInfoSection
-                        .frame(width: contentWidth)
+                        videoInfoSection
+                            .frame(width: contentWidth)
 
-                    errorSection
-                        .frame(width: contentWidth)
+                        errorSection
+                            .frame(width: contentWidth)
 
-                    tabSection
-                        .frame(width: contentWidth)
+                        tabSection
+                            .frame(width: contentWidth)
 
-                    animatedTabContentSection
-                        .frame(width: contentWidth)
+                        animatedTabContentSection
+                            .frame(width: contentWidth)
+                    }
+                    .padding(.horizontal, pageHorizontalInset)
+                    .padding(.top, 12)
+                    .padding(.bottom, 24)
+                    .frame(maxWidth: .infinity, alignment: .top)
                 }
-                .padding(.horizontal, pageHorizontalInset)
-                .padding(.top, 12)
-                .padding(.bottom, 24)
-                .frame(maxWidth: .infinity, alignment: .top)
-            }
-            .coordinateSpace(name: "videoDetailScroll")
-            .onPreferenceChange(VideoDetailPlayerMinYPreferenceKey.self) { value in
-                playerScrollMinY = value
+                .coordinateSpace(name: "videoDetailScroll")
+                .onPreferenceChange(VideoDetailPlayerMinYPreferenceKey.self) { value in
+                    playerScrollMinY = value
+                }
+
+                playerCardSection(height: playerHeight)
+                    .frame(width: playerWidth)
+                    .offset(y: playerOverlayY)
+                    .opacity(shouldShowPlayerOverlay(playerHeight: playerHeight) ? 1 : 0)
+                    .allowsHitTesting(shouldShowPlayerOverlay(playerHeight: playerHeight))
+                    .zIndex(10)
             }
             .background(Color(.systemGroupedBackground))
             .animation(.spring(response: 0.32, dampingFraction: 0.88), value: isVideoPlaying)
@@ -142,12 +141,25 @@ struct VideoDetailView: View {
             .frame(height: height)
     }
 
-    private var pinnedVideoOffset: CGFloat {
-        guard isVideoPlaying else {
-            return 0
-        }
+    private func playerPlaceholder(height: CGFloat) -> some View {
+        Color.clear
+            .frame(height: height)
+            .background(
+                GeometryReader { playerProxy in
+                    Color.clear.preference(
+                        key: VideoDetailPlayerMinYPreferenceKey.self,
+                        value: playerProxy.frame(in: .named("videoDetailScroll")).minY
+                    )
+                }
+            )
+    }
 
-        return max(0, playerPinnedTopOffset - playerScrollMinY)
+    private var playerOverlayY: CGFloat {
+        isVideoPlaying ? max(playerPinnedTopOffset, playerScrollMinY) : playerScrollMinY
+    }
+
+    private func shouldShowPlayerOverlay(playerHeight: CGFloat) -> Bool {
+        isVideoPlaying || playerScrollMinY + playerHeight > 0
     }
 
     @ViewBuilder
