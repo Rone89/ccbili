@@ -10,6 +10,7 @@ import SwiftUI
 
 struct HistoryView: View {
     @State private var viewModel = HistoryViewModel()
+    @State private var playbackHistories: [String: VideoPlaybackHistory] = [:]
 
     var body: some View {
         List {
@@ -42,7 +43,9 @@ struct HistoryView: View {
                                 title: item.title,
                                 subtitle: item.subtitle,
                                 accessoryText: item.bvid,
-                                coverURL: item.coverURL
+                                coverURL: item.coverURL,
+                                continueWatchingText: continueWatchingText(for: item),
+                                progress: playbackHistories[item.id]?.progressFraction
                             )
                         }
                     }
@@ -51,12 +54,26 @@ struct HistoryView: View {
         }
         .navigationTitle("历史观看")
         .task {
+            refreshPlaybackHistories()
             if viewModel.items.isEmpty {
                 await viewModel.load()
             }
         }
         .refreshable {
             await viewModel.load()
+            refreshPlaybackHistories()
         }
+        .onAppear {
+            refreshPlaybackHistories()
+        }
+    }
+
+    private func refreshPlaybackHistories() {
+        playbackHistories = VideoPlaybackHistoryStore.histories()
+    }
+
+    private func continueWatchingText(for item: VideoItem) -> String? {
+        guard let history = playbackHistories[item.id] else { return nil }
+        return "继续观看到 \(history.displayText)"
     }
 }

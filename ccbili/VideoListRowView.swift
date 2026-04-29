@@ -5,17 +5,23 @@ struct VideoListRowView: View {
     let subtitle: String
     let accessoryText: String?
     let coverURL: URL?
+    let continueWatchingText: String?
+    let progress: Double?
 
     init(
         title: String,
         subtitle: String,
         accessoryText: String? = nil,
-        coverURL: URL? = nil
+        coverURL: URL? = nil,
+        continueWatchingText: String? = nil,
+        progress: Double? = nil
     ) {
         self.title = title
         self.subtitle = subtitle
         self.accessoryText = accessoryText
         self.coverURL = coverURL
+        self.continueWatchingText = continueWatchingText
+        self.progress = progress
     }
 
     var body: some View {
@@ -51,6 +57,17 @@ struct VideoListRowView: View {
             )
             .aspectRatio(16 / 9, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(alignment: .bottomLeading) {
+                if let progress {
+                    GeometryReader { proxy in
+                        Rectangle()
+                            .fill(Color(red: 251 / 255, green: 114 / 255, blue: 153 / 255))
+                            .frame(width: proxy.size.width * min(max(progress, 0), 1))
+                            .frame(maxHeight: .infinity, alignment: .bottom)
+                    }
+                    .frame(height: 3)
+                }
+            }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(title)
@@ -63,6 +80,13 @@ struct VideoListRowView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+
+                if let continueWatchingText {
+                    Label(continueWatchingText, systemImage: "play.circle")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(Color(red: 251 / 255, green: 114 / 255, blue: 153 / 255))
+                        .lineLimit(1)
+                }
             }
             .padding(.horizontal, 2)
         }

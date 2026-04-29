@@ -24,7 +24,7 @@ struct VideoDetailView: View {
     @State private var commentSortMode: CommentSortMode = .hot
     @State private var videoAspectRatio: CGFloat = 16 / 9
     @State private var restoredPlaybackPosition: Double?
-    @State private var lastSavedPlaybackSecond = 0
+    @State private var lastSavedPlaybackPercent = -1
     @State private var expandedCommentReplies: [String: [VideoCommentPreviewReply]] = [:]
     @State private var loadingReplyCommentIDs: Set<String> = []
 
@@ -110,7 +110,7 @@ struct VideoDetailView: View {
             }
         }
         .onDisappear {
-            savePlaybackHistoryIfNeeded()
+            savePlaybackHistoryIfNeeded(force: true)
             configurePlayer(for: nil)
             AppOrientationController.lock(.portrait)
         }
@@ -1168,10 +1168,10 @@ struct VideoDetailView: View {
         }
     }
 
-    private func savePlaybackHistoryIfNeeded() {
-        let currentSecond = Int(playbackPosition.rounded(.down))
-        guard abs(currentSecond - lastSavedPlaybackSecond) >= 5 else { return }
-        lastSavedPlaybackSecond = currentSecond
+    private func savePlaybackHistoryIfNeeded(force: Bool = false) {
+        let currentPercent = Int((playbackPosition * 100).rounded(.down))
+        guard force || playbackPosition >= 0.98 || abs(currentPercent - lastSavedPlaybackPercent) >= 3 else { return }
+        lastSavedPlaybackPercent = currentPercent
         VideoPlaybackHistoryStore.save(videoID: viewModel.playbackItem.id, position: playbackPosition)
     }
 

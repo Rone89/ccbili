@@ -5,11 +5,12 @@ struct VideoPlaybackHistory: Codable, Equatable {
     let position: Double
     let updatedAt: Date
 
+    var progressFraction: Double {
+        min(max(position, 0), 1)
+    }
+
     var displayText: String {
-        let totalSeconds = max(Int(position.rounded(.down)), 0)
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+        "\(Int((progressFraction * 100).rounded()))%"
     }
 }
 
@@ -20,10 +21,27 @@ enum VideoPlaybackHistoryStore {
         load()[videoID]
     }
 
+    static func histories() -> [String: VideoPlaybackHistory] {
+        load()
+    }
+
     static func save(videoID: String, position: Double) {
-        guard position.isFinite, position > 3 else { return }
+        guard position.isFinite else { return }
+        let progress = min(max(position, 0), 1)
+        guard progress >= 0.03 else { return }
+        if progress >= 0.98 {
+            remove(videoID: videoID)
+            return
+        }
+
         var values = load()
-        values[videoID] = VideoPlaybackHistory(videoID: videoID, position: position, updatedAt: Date())
+        values[videoID] = VideoPlaybackHistory(videoID: videoID, position: progress, updatedAt: Date())
+        persist(values)
+    }
+
+    static func remove(videoID: String) {
+        var values = load()
+        values.removeValue(forKey: videoID)
         persist(values)
     }
 
