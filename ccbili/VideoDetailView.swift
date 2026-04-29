@@ -71,7 +71,7 @@ struct VideoDetailView: View {
             .background(Color(.systemGroupedBackground))
             .animation(.spring(response: 0.32, dampingFraction: 0.88), value: isVideoPlaying)
         }
-        .navigationTitle("瑙嗛璇︽儏")
+        .navigationTitle("视频详情")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
@@ -170,7 +170,7 @@ struct VideoDetailView: View {
                     Spacer()
 
                     Label(
-                        viewModel.isLoadingPlaybackSource ? "鍑嗗涓? : "鏈氨缁?,
+                        viewModel.isLoadingPlaybackSource ? "准备中" : "未就绪",
                         systemImage: viewModel.isLoadingPlaybackSource ? "arrow.triangle.2.circlepath" : "wifi.exclamationmark"
                     )
                         .font(.caption.weight(.medium))
@@ -202,12 +202,12 @@ struct VideoDetailView: View {
                     }
 
                     VStack(spacing: 4) {
-                        Text("瑙嗛鎾斁鍖哄煙")
+                        Text("视频播放区域")
                             .font(.headline)
                             .foregroundStyle(.primary)
 
                         Text(viewModel.playbackErrorMessage ?? playbackPlaceholderText)
-                            .font(.footnote)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                     }
@@ -224,10 +224,10 @@ struct VideoDetailView: View {
 
     private var playbackPlaceholderText: String {
         if viewModel.isLoadingPlaybackSource {
-            return "姝ｅ湪鑾峰彇 1080P 鎾斁鍦板潃锛岃瘎璁哄拰鎺ㄨ崘浼氬厛鍔犺浇"
+            return "正在获取 1080P 播放地址，评论和推荐会先加载"
         }
 
-        return "姝ｅ湪鑾峰彇鎾斁鍦板潃"
+        return "正在获取播放地址"
     }
 
     private var bottomPlaybackOverlay: some View {
@@ -238,12 +238,12 @@ struct VideoDetailView: View {
                     .foregroundStyle(.white)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("绛夊緟鎾斁")
+                    Text("等待播放")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.white)
 
-                    Text("鎾斁鍣ㄦ鍦ㄥ噯澶囦腑")
-                        .font(.footnote)
+                    Text("播放器正在准备中")
+                        .font(.caption2)
                         .foregroundStyle(.white.opacity(0.82))
                         .lineLimit(1)
                 }
@@ -307,7 +307,7 @@ struct VideoDetailView: View {
                 .textSelection(.enabled)
 
             HStack(spacing: 8) {
-                metaChip(systemImage: "play.rectangle", text: statsText(viewModel.stats.views, fallback: "鎾斁鏁板緟鎺ュ叆"))
+                metaChip(systemImage: "play.rectangle", text: statsText(viewModel.stats.views, fallback: "播放数待接入"))
                 metaChip(systemImage: "calendar", text: viewModel.uploadTimeText)
                 qualityPicker
             }
@@ -322,7 +322,7 @@ struct VideoDetailView: View {
             }
 
             if let history = VideoPlaybackHistoryStore.history(for: viewModel.playbackItem.id) {
-                Label("涓婃鐪嬪埌 \(history.displayText)", systemImage: "clock.arrow.circlepath")
+                Label("上次看到 \(history.displayText)", systemImage: "clock.arrow.circlepath")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 10)
@@ -352,17 +352,17 @@ struct VideoDetailView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(viewModel.author?.name ?? viewModel.playbackItem.subtitle)
-                    .font(.callout.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
-                Text(viewModel.author?.followerText ?? "绮変笣鏁板緟鎺ュ叆")
-                    .font(.footnote)
+                Text(viewModel.author?.followerText ?? "粉丝数待接入")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
 
-            Button("+ 鍏虫敞") {}
-                .font(.callout.weight(.semibold))
+            Button("+ 关注") {}
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
@@ -411,7 +411,7 @@ struct VideoDetailView: View {
                         .controlSize(.small)
                 }
 
-                Text(viewModel.playbackSource?.qualityDescription ?? "娓呮櫚搴?)
+                Text(viewModel.playbackSource?.qualityDescription ?? "清晰度")
                     .font(.caption.weight(.semibold))
 
                 Image(systemName: "chevron.down")
@@ -518,16 +518,16 @@ struct VideoDetailView: View {
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(author.name)
-                            .font(.callout.weight(.semibold))
+                            .font(.subheadline.weight(.semibold))
 
                         Text(author.followerText)
-                            .font(.footnote)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                     }
 
                     Spacer()
 
-                    Button("鍏虫敞") {
+                    Button("关注") {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.regular)
@@ -541,7 +541,7 @@ struct VideoDetailView: View {
                     in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
                 )
             } else {
-                Text("鏆傛棤 UP 涓讳俊鎭?)
+                Text("暂无 UP 主信息")
                     .foregroundStyle(.secondary)
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -559,7 +559,7 @@ struct VideoDetailView: View {
     private var actionSection: some View {
         HStack(spacing: 10) {
             actionIconButton(
-                title: statsText(viewModel.stats.favorites, fallback: "鏀惰棌"),
+                title: statsText(viewModel.stats.favorites, fallback: "收藏"),
                 systemImage: favoriteViewModel.isFavorite ? "star.fill" : "star",
                 tint: favoriteViewModel.isFavorite ? .yellow : .secondary,
                 isLoading: favoriteViewModel.isLoading
@@ -570,7 +570,7 @@ struct VideoDetailView: View {
             }
 
             actionIconButton(
-                title: statsText(viewModel.stats.likes, fallback: "鐐硅禐"),
+                title: statsText(viewModel.stats.likes, fallback: "点赞"),
                 systemImage: didLike ? "hand.thumbsup.fill" : "hand.thumbsup",
                 tint: didLike ? .blue : .secondary,
                 isLoading: isSubmittingLike
@@ -581,7 +581,7 @@ struct VideoDetailView: View {
             }
 
             actionIconButton(
-                title: statsText(viewModel.stats.coins, fallback: "鎶曞竵"),
+                title: statsText(viewModel.stats.coins, fallback: "投币"),
                 systemImage: didCoin ? "bitcoinsign.circle.fill" : "bitcoinsign.circle",
                 tint: didCoin ? .yellow : .secondary,
                 isLoading: isSubmittingCoin
@@ -592,7 +592,7 @@ struct VideoDetailView: View {
             }
 
             actionIconButton(
-                title: statsText(viewModel.stats.shares, fallback: "鍒嗕韩"),
+                title: statsText(viewModel.stats.shares, fallback: "分享"),
                 systemImage: "square.and.arrow.up",
                 tint: .secondary,
                 isLoading: false
@@ -607,28 +607,28 @@ struct VideoDetailView: View {
     @ViewBuilder
     private var errorSection: some View {
         if let favoriteError = favoriteViewModel.errorMessage, !favoriteError.isEmpty {
-            errorCard(title: "鏀惰棌閿欒", message: favoriteError)
+            errorCard(title: "收藏错误", message: favoriteError)
         }
 
         if let likeErrorMessage, !likeErrorMessage.isEmpty {
-            errorCard(title: "鐐硅禐閿欒", message: likeErrorMessage)
+            errorCard(title: "点赞错误", message: likeErrorMessage)
         }
 
         if let coinErrorMessage, !coinErrorMessage.isEmpty {
-            errorCard(title: "鎶曞竵閿欒", message: coinErrorMessage)
+            errorCard(title: "投币错误", message: coinErrorMessage)
         }
 
         if let errorMessage = viewModel.errorMessage, !errorMessage.isEmpty {
-            errorCard(title: "鍔犺浇閿欒", message: errorMessage)
+            errorCard(title: "加载错误", message: errorMessage)
         }
     }
 
     // MARK: - Tabs
 
     private var tabSection: some View {
-        Picker("璇︽儏鍒嗗尯", selection: $selectedTab) {
-            Text("绠€浠?).tag(DetailTab.intro)
-            Text("璇勮").tag(DetailTab.comments)
+        Picker("详情分区", selection: $selectedTab) {
+            Text("简介").tag(DetailTab.intro)
+            Text("评论").tag(DetailTab.comments)
         }
         .pickerStyle(.segmented)
         .frame(maxWidth: .infinity)
@@ -651,12 +651,12 @@ struct VideoDetailView: View {
     private var introContent: some View {
         VStack(alignment: .leading, spacing: 14) {
             if viewModel.descriptionText.isEmpty {
-                Text("鏆傛棤绠€浠?)
-                    .font(.body)
+                Text("暂无简介")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
                 Text(viewModel.descriptionText)
-                    .font(.body)
+                    .font(.subheadline)
                     .foregroundStyle(.primary)
                     .lineSpacing(3)
             }
@@ -664,12 +664,12 @@ struct VideoDetailView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("鐩稿叧鎺ㄨ崘")
+                Text("相关推荐")
                     .font(.headline)
 
                 if viewModel.relatedVideos.isEmpty {
-                    Text("鏆傛棤鐩稿叧鎺ㄨ崘")
-                        .font(.body)
+                    Text("暂无相关推荐")
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else {
                     LazyVStack(spacing: 10) {
@@ -710,7 +710,7 @@ struct VideoDetailView: View {
     private var commentsContent: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("璇勮")
+                Text("评论")
                     .font(.headline)
 
                 Spacer()
@@ -751,7 +751,7 @@ struct VideoDetailView: View {
                     currentUserAvatarView
 
                     HStack {
-                        Text("璇寸偣浠€涔堝惂...")
+                        Text("说点什么吧...")
                             .font(.body)
                             .foregroundStyle(.secondary)
 
@@ -778,11 +778,11 @@ struct VideoDetailView: View {
             if viewModel.isLoading && viewModel.comments.isEmpty {
                 HStack(spacing: 10) {
                     ProgressView()
-                    Text("姝ｅ湪鍔犺浇璇勮...")
+                    Text("正在加载评论...")
                         .foregroundStyle(.secondary)
                 }
             } else if viewModel.comments.isEmpty {
-                Text("鏆傛棤璇勮")
+                Text("暂无评论")
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(viewModel.comments) { comment in
@@ -842,7 +842,7 @@ struct VideoDetailView: View {
                                 if !comment.previewReplies.isEmpty {
                                     VStack(alignment: .leading, spacing: 6) {
                                         ForEach(comment.previewReplies, id: \.self) { reply in
-                                            Text("\(reply.username)锛歕(reply.message)")
+                                            Text("\(reply.username)：\(reply.message)")
                                                 .font(.footnote)
                                                 .foregroundStyle(.secondary)
                                                 .lineLimit(2)
@@ -854,18 +854,18 @@ struct VideoDetailView: View {
                                 }
 
                                 HStack(spacing: 16) {
-                                    Label("鍥炲", systemImage: "bubble.left")
+                                    Label("回复", systemImage: "bubble.left")
                                         .font(.footnote)
                                         .foregroundStyle(.tertiary)
 
-                                    Label(statsText(comment.likeCount, fallback: "鐐硅禐"), systemImage: "hand.thumbsup")
+                                    Label(statsText(comment.likeCount, fallback: "点赞"), systemImage: "hand.thumbsup")
                                         .font(.footnote)
                                         .foregroundStyle(.tertiary)
 
                                     Spacer()
 
                                     if comment.replyCount > 0 {
-                                        Button(loadingReplyCommentIDs.contains(comment.id) ? "姝ｅ湪鍔犺浇..." : "鏌ョ湅 \(comment.replyCount) 鏉″洖澶?) {
+                                        Button(loadingReplyCommentIDs.contains(comment.id) ? "正在加载..." : "查看 \(comment.replyCount) 条回复") {
                                             Task {
                                                 await loadReplies(for: comment)
                                             }
@@ -879,7 +879,7 @@ struct VideoDetailView: View {
                                 if let expandedReplies = expandedCommentReplies[comment.id], !expandedReplies.isEmpty {
                                     VStack(alignment: .leading, spacing: 6) {
                                         ForEach(expandedReplies, id: \.self) { reply in
-                                            Text("\(reply.username)锛歕(reply.message)")
+                                            Text("\(reply.username)：\(reply.message)")
                                                 .font(.footnote)
                                                 .foregroundStyle(.secondary)
                                                 .lineLimit(3)
@@ -976,12 +976,12 @@ struct VideoDetailView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(title)
-                    .font(.callout.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(2)
 
                 Text(subtitle)
-                    .font(.footnote)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -1036,7 +1036,7 @@ struct VideoDetailView: View {
 
     private func metaChip(systemImage: String, text: String) -> some View {
         Label(text, systemImage: systemImage)
-            .font(.footnote)
+            .font(.caption)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
@@ -1053,7 +1053,7 @@ struct VideoDetailView: View {
                 .foregroundStyle(.red)
 
             Text(message)
-                .font(.body)
+                .font(.subheadline)
                 .foregroundStyle(.red)
         }
         .padding(14)
@@ -1080,7 +1080,7 @@ struct VideoDetailView: View {
 
     private func likeCurrentVideo() async {
         guard let aid = viewModel.playbackItem.aid else {
-            likeErrorMessage = "缂哄皯 aid锛屾殏鏃舵棤娉曠偣璧?
+            likeErrorMessage = "缺少 aid，暂时无法点赞"
             return
         }
 
@@ -1102,7 +1102,7 @@ struct VideoDetailView: View {
 
     private func coinCurrentVideo() async {
         guard let aid = viewModel.playbackItem.aid else {
-            coinErrorMessage = "缂哄皯 aid锛屾殏鏃舵棤娉曟姇甯?
+            coinErrorMessage = "缺少 aid，暂时无法投币"
             return
         }
 
@@ -1136,11 +1136,11 @@ struct VideoDetailView: View {
             viewModel.comments = [
                 VideoComment(
                     id: "comment-load-failed-\(sortMode.title)",
-                    username: "绯荤粺鎻愮ず",
-                    message: "璇勮鍔犺浇澶辫触锛歕(error.localizedDescription)",
+                    username: "系统提示",
+                    message: "评论加载失败：\(error.localizedDescription)",
                     userID: nil,
                     avatarURL: nil,
-                    timeText: "鏃堕棿鏈煡"
+                    timeText: "时间未知"
                 )
             ]
         }
@@ -1167,7 +1167,7 @@ struct VideoDetailView: View {
             expandedCommentReplies[comment.id] = replies
         } catch {
             expandedCommentReplies[comment.id] = [
-                VideoCommentPreviewReply(username: "绯荤粺鎻愮ず", message: "鍥炲鍔犺浇澶辫触锛歕(error.localizedDescription)")
+                VideoCommentPreviewReply(username: "系统提示", message: "回复加载失败：\(error.localizedDescription)")
             ]
         }
     }
@@ -1176,7 +1176,7 @@ struct VideoDetailView: View {
         guard let value else { return fallback }
         if value >= 10_000 {
             let number = Double(value) / 10_000
-            return String(format: "%.1f涓?, number)
+            return String(format: "%.1f万", number)
         }
         return String(value)
     }
@@ -1196,9 +1196,9 @@ private enum CommentSortMode: CaseIterable {
     var title: String {
         switch self {
         case .hot:
-            return "鎸夌儹搴?
+            return "按热度"
         case .latest:
-            return "鎸夋椂闂?
+            return "按时间"
         }
     }
 
