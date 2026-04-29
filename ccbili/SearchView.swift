@@ -73,6 +73,7 @@ struct SearchView: View {
                         viewModel.clearHistory()
                     }
                     .font(.subheadline)
+                    .disabled(viewModel.searchHistory.isEmpty)
                 }
 
                 historyTagsView
@@ -113,10 +114,28 @@ struct SearchView: View {
 
     private var resultsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("搜索结果")
-                .font(.headline)
+            HStack {
+                Text("搜索结果")
+                    .font(.headline)
 
-            if !viewModel.isLoading && viewModel.results.isEmpty {
+                if viewModel.hasSearched && !viewModel.results.isEmpty {
+                    Text("\(viewModel.results.count) 条")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+            }
+
+            if !viewModel.hasSearched && viewModel.results.isEmpty {
+                ContentUnavailableView(
+                    "输入关键词开始搜索",
+                    systemImage: "magnifyingglass",
+                    description: Text("也可以点选搜索历史快速开始")
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.top, 16)
+            } else if !viewModel.isLoading && viewModel.results.isEmpty {
                 ContentUnavailableView(
                     "暂无搜索结果",
                     systemImage: "magnifyingglass",
@@ -138,7 +157,28 @@ struct SearchView: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .task {
+                            await viewModel.loadMoreIfNeeded(currentItem: item)
+                        }
                     }
+                }
+
+                if viewModel.isLoadingMore {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("正在加载更多结果...")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 8)
+                } else if viewModel.hasSearched && !viewModel.canLoadMore && !viewModel.results.isEmpty {
+                    Text("没有更多结果了")
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 8)
                 }
             }
         }

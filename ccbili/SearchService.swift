@@ -1,18 +1,31 @@
 import Foundation
 
 struct SearchService {
+    struct SearchPage {
+        let items: [VideoItem]
+        let page: Int
+        let hasMore: Bool
+    }
+
     func searchAll(keyword: String, page: Int = 1) async throws -> [VideoItem] {
+        try await searchVideos(keyword: keyword, page: page).items
+    }
+
+    func searchVideos(keyword: String, page: Int = 1) async throws -> SearchPage {
         let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
+        guard !trimmed.isEmpty else {
+            return SearchPage(items: [], page: page, hasMore: false)
+        }
 
         var components = URLComponents(
-            url: AppConfig.apiBaseURL.appending(path: "/x/web-interface/wbi/search/all/v2"),
+            url: AppConfig.apiBaseURL.appending(path: "/x/web-interface/wbi/search/type"),
             resolvingAgainstBaseURL: false
         )
 
         let queryItems = try await WBI.shared.signedQueryItems(from: [
             "keyword": trimmed,
-            "page": String(page)
+            "page": String(page),
+            "search_type": "video"
         ])
         components?.queryItems = queryItems
 
@@ -22,7 +35,7 @@ struct SearchService {
 
         let response = try await APIClient.shared.get(
             url: url,
-            as: SearchAllResponseDTO.self
+            as: SearchVideoResponseDTO.self
         )
 
         guard response.code == 0 else {
@@ -34,11 +47,14 @@ struct SearchService {
                 return nil
             }
 
-            let cleanTitle = (result.title ?? "未知标题")
-                .replacingOccurrences(of: "<em class=\"keyword\">", with: "")
-                .replacingOccurrences(of: "</em>", with: "")
+            let cleanTitle = cleanSearchText(result.title ?? "未知标题")
 
-            let subtitle = result.author ?? "未知 UP 主"
+            let subtitleParts = [result.author, result.duration]
+                .compactMap { value -> String? in
+                    guard let value, !value.isEmpty else { return nil }
+                    return cleanSearchText(value)
+                }
+            let subtitle = subtitleParts.isEmpty ? "未知 UP 主" : subtitleParts.joined(separator: " · ")
             let coverURL = normalizedImageURL(from: result.pic)
 
             return VideoItem(
@@ -52,7 +68,17 @@ struct SearchService {
             )
         }
 
-        return items
+        let currentPage = response.data?.page ?? page
+        let numPages = response.data?.numPages ?? currentPage
+        return SearchPage(items: items, page: currentPage, hasMore: currentPage < numPages)
+    }
+
+    private func cleanSearchText(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "<em class=\"keyword\">", with: "")
+            .replacingOccurrences(of: "</em>", with: "")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&amp;", with: "&")
     }
 
     private func normalizedImageURL(from path: String?) -> URL? {
