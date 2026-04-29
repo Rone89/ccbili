@@ -70,7 +70,9 @@ struct VideoDetailView: View {
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
             UIDevice.current.beginGeneratingDeviceOrientationNotifications()
-            AppOrientationController.lock(.portrait)
+            Task { @MainActor in
+                AppOrientationController.lock(.portrait)
+            }
         }
         .task {
             favoriteViewModel.load(videoID: viewModel.playbackItem.id)
@@ -100,7 +102,9 @@ struct VideoDetailView: View {
         }
         .onDisappear {
             configurePlayer(for: nil)
-            AppOrientationController.lock(.portrait)
+            Task { @MainActor in
+                AppOrientationController.lock(.portrait)
+            }
         }
     }
 

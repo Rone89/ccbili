@@ -44,7 +44,9 @@ struct ContentView: View {
             .tag(MainTab.profile)
         }
         .onAppear {
-            AppOrientationController.lock(.portrait)
+            Task { @MainActor in
+                AppOrientationController.lock(.portrait)
+            }
         }
         .onChange(of: selectedTab) { oldValue, newValue in
             guard newValue == .home else { return }
