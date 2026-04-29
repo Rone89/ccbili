@@ -179,6 +179,41 @@ final class VideoDetailViewModel {
         }
     }
 
+    @MainActor
+    func switchPlaybackQuality(to option: VideoQualityOption) async {
+        guard option.quality != playbackSource?.quality else { return }
+        guard let bvid = playbackItem.resolvedBVID, let cid = playbackItem.cid else {
+            playbackErrorMessage = "缺少 cid，暂时无法切换清晰度"
+            return
+        }
+
+        isLoadingPlaybackSource = true
+        playbackErrorMessage = nil
+        playbackFallbackMessage = nil
+
+        do {
+            let source = try await Self.fetchPlayableSourceWithFallback(
+                bvid: bvid,
+                cid: cid,
+                preferredQuality: option.quality,
+                playURLCache: playURLCache
+            )
+
+            playbackSource = source
+            playURL = source.url
+            if let selectedQuality = source.quality {
+                PlaybackPreferences.savePreferredQuality(selectedQuality)
+            }
+            if source.quality != option.quality {
+                playbackFallbackMessage = "已自动切换到\(source.qualityDescription ?? "可播放清晰度")"
+            }
+        } catch {
+            playbackErrorMessage = error.localizedDescription
+        }
+
+        isLoadingPlaybackSource = false
+    }
+
     private static func fetchPlayableSourceWithFallback(
         bvid: String,
         cid: Int,

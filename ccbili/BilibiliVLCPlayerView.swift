@@ -111,8 +111,11 @@ struct BilibiliVLCPlayerView: View {
         }
         .onChange(of: source) { _, newValue in
             currentSource = newValue
+            pendingSeekPosition = initialPosition ?? playbackState.position
+            playbackState.pendingSeekPosition = pendingSeekPosition
             surfaceID = UUID()
             showControlsTemporarily()
+            schedulePendingSeekIfNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
             guard enablesAutoFullscreen else {
@@ -169,17 +172,6 @@ struct BilibiliVLCPlayerView: View {
 
                 playerOverlays
                     .opacity(isFullscreenPresented ? 0 : 1)
-            } else if !isFullscreenPresented {
-                VStack {
-                    HStack {
-                        Spacer()
-                        qualityMenu
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.top, 10)
-
-                    Spacer()
-                }
             }
         }
         .frame(maxWidth: .infinity)
@@ -279,8 +271,6 @@ struct BilibiliVLCPlayerView: View {
             }
 
             Spacer()
-
-            qualityMenu
 
             if !currentSource.isDASHSeparated, let onFullscreenRequest {
                 Button {

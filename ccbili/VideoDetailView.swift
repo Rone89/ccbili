@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 import AVKit
 
 struct VideoDetailView: View {
@@ -13,6 +13,7 @@ struct VideoDetailView: View {
     @State private var interactionService = VideoInteractionService()
     @State private var isSubmittingLike = false
     @State private var isSubmittingCoin = false
+    @State private var isSwitchingQuality = false
 
     @State private var didLike = false
     @State private var didCoin = false
@@ -310,16 +311,7 @@ struct VideoDetailView: View {
                 metaChip(systemImage: "calendar", text: viewModel.uploadTimeText)
             }
 
-            HStack(spacing: 8) {
-                ForEach(infoTags, id: \.self) { tag in
-                    Text(tag)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
-                }
-            }
+            qualityPicker
 
             if let fallbackMessage = viewModel.playbackFallbackMessage {
                 Label(fallbackMessage, systemImage: "arrow.down.circle")
@@ -398,12 +390,66 @@ struct VideoDetailView: View {
         }
     }
 
-    private var infoTags: [String] {
-        var tags = ["视频", "Bilibili"]
-        if let quality = viewModel.playbackSource?.qualityDescription {
-            tags.append(quality)
+    private var qualityPicker: some View {
+        Menu {
+            ForEach(availableQualityOptions) { option in
+                Button {
+                    Task {
+                        await switchPlaybackQuality(to: option)
+                    }
+                } label: {
+                    if option.quality == viewModel.playbackSource?.quality {
+                        Label(option.description, systemImage: "checkmark")
+                    } else {
+                        Text(option.description)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                if isSwitchingQuality || viewModel.isLoadingPlaybackSource {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+
+                Text(viewModel.playbackSource?.qualityDescription ?? "清晰度")
+                    .font(.caption.weight(.semibold))
+
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
         }
-        return tags
+        .buttonStyle(.plain)
+        .disabled(availableQualityOptions.isEmpty || isSwitchingQuality || viewModel.isLoadingPlaybackSource)
+    }
+
+    private var availableQualityOptions: [VideoQualityOption] {
+        if let options = viewModel.playbackSource?.availableQualities, !options.isEmpty {
+            return options
+        }
+
+        if let source = viewModel.playbackSource,
+           let quality = source.quality,
+           let description = source.qualityDescription {
+            return [VideoQualityOption(quality: quality, description: description)]
+        }
+
+        return []
+    }
+
+    @MainActor
+    private func switchPlaybackQuality(to option: VideoQualityOption) async {
+        guard !isSwitchingQuality else { return }
+        let currentPosition = playbackPosition
+        isSwitchingQuality = true
+        await viewModel.switchPlaybackQuality(to: option)
+        playbackPosition = currentPosition
+        restoredPlaybackPosition = currentPosition
+        isSwitchingQuality = false
     }
 
     // MARK: - Title
@@ -1166,4 +1212,3 @@ private enum CommentSortMode: CaseIterable {
         }
     }
 }
-

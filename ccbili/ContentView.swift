@@ -1,4 +1,4 @@
-﻿//
+//
 //  ContentView.swift
 //  ccbili
 //
@@ -19,30 +19,24 @@ struct ContentView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            NavigationStack {
-                HomeView()
-            }
-            .tabItem {
-                Label("首页", systemImage: "house")
-            }
-            .tag(MainTab.home)
+            HomeTabRoot()
+                .tabItem {
+                    Label("首页", systemImage: "house")
+                }
+                .tag(MainTab.home)
 
-            NavigationStack {
-                SearchView()
-            }
-            .tabItem {
-                Label("搜索", systemImage: "magnifyingglass")
-            }
-            .tag(MainTab.search)
+            SearchTabRoot()
+                .tabItem {
+                    Label("搜索", systemImage: "magnifyingglass")
+                }
+                .tag(MainTab.search)
 
-            NavigationStack {
-                ProfileView()
-            }
-            .tabItem {
-                Label("我的", systemImage: "person")
-            }
-            .tag(MainTab.profile)
-        }
+            ProfileTabRoot()
+                .tabItem {
+                    Label("我的", systemImage: "person")
+                }
+                .tag(MainTab.profile)
+        }
         .onAppear {
             AppOrientationController.lock(.portrait)
         }
@@ -58,6 +52,30 @@ struct ContentView: View {
     }
 }
 
+private struct HomeTabRoot: View {
+    var body: some View {
+        NavigationStack {
+            HomeView()
+        }
+    }
+}
+
+private struct SearchTabRoot: View {
+    var body: some View {
+        NavigationStack {
+            SearchView()
+        }
+    }
+}
+
+private struct ProfileTabRoot: View {
+    var body: some View {
+        NavigationStack {
+            ProfileView()
+        }
+    }
+}
+
 #Preview {
     ContentView()
         .environment(AuthManager())
@@ -67,4 +85,3 @@ extension Notification.Name {
     static let homeTabDidRetap = Notification.Name("homeTabDidRetap")
     static let homeRefreshRequested = Notification.Name("homeRefreshRequested")
 }
-
