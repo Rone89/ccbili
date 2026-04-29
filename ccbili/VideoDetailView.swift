@@ -21,7 +21,6 @@ struct VideoDetailView: View {
     @State private var coinErrorMessage: String?
     @State private var selectedTab: DetailTab = .intro
     @State private var commentSortMode: CommentSortMode = .hot
-    @State private var playerScrollOffset: CGFloat = 0
     @State private var isVideoPlaying = false
 
     private let biliPink = Color(red: 251 / 255, green: 114 / 255, blue: 153 / 255)
@@ -39,20 +38,10 @@ struct VideoDetailView: View {
         GeometryReader { proxy in
             let contentWidth = max(proxy.size.width - pageHorizontalInset * 2, 0)
             let playerHeight = contentWidth * 9 / 16
-            let playerOffsetY = isVideoPlaying ? 0 : playerScrollOffset
-
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    playerPlaceholderSection(height: playerHeight)
+                    playerCardSection(height: playerHeight)
                         .frame(width: contentWidth)
-                        .background(
-                            GeometryReader { geometry in
-                                Color.clear.preference(
-                                    key: PlayerOffsetPreferenceKey.self,
-                                    value: geometry.frame(in: .named("videoDetailScroll")).minY
-                                )
-                            }
-                        )
 
                     titleCardSection
                         .frame(width: contentWidth)
@@ -77,19 +66,7 @@ struct VideoDetailView: View {
                 .padding(.bottom, 24)
                 .frame(maxWidth: .infinity, alignment: .top)
             }
-            .coordinateSpace(name: "videoDetailScroll")
-            .onPreferenceChange(PlayerOffsetPreferenceKey.self) { value in
-                playerScrollOffset = value
-            }
             .background(Color(.systemGroupedBackground))
-            .overlay(alignment: .topLeading) {
-                playerCardSection(height: playerHeight)
-                    .frame(width: contentWidth, height: playerHeight)
-                    .clipShape(RoundedRectangle(cornerRadius: detailCardCornerRadius, style: .continuous))
-                    .shadow(color: .black.opacity(isVideoPlaying ? 0.16 : 0), radius: 16, x: 0, y: 8)
-                    .offset(x: pageHorizontalInset, y: playerOffsetY)
-                    .zIndex(10)
-            }
             .animation(.spring(response: 0.32, dampingFraction: 0.88), value: isVideoPlaying)
         }
         .navigationTitle("视频详情")
@@ -97,7 +74,7 @@ struct VideoDetailView: View {
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
             UIDevice.current.beginGeneratingDeviceOrientationNotifications()
-            AppOrientationController.lock(.portrait)
+            AppOrientationController.lock(.allButUpsideDown)
         }
         .task {
             favoriteViewModel.load(videoID: viewModel.playbackItem.id)
@@ -139,17 +116,6 @@ struct VideoDetailView: View {
             .frame(height: height)
             .background(Color.black)
             .clipShape(RoundedRectangle(cornerRadius: detailCardCornerRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: detailCardCornerRadius, style: .continuous)
-                    .strokeBorder(Color(.separator).opacity(0.08), lineWidth: 0.5)
-            }
-    }
-
-    private func playerPlaceholderSection(height: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: detailCardCornerRadius, style: .continuous)
-            .fill(Color.black.opacity(0.92))
-            .frame(maxWidth: .infinity)
-            .frame(height: height)
             .overlay {
                 RoundedRectangle(cornerRadius: detailCardCornerRadius, style: .continuous)
                     .strokeBorder(Color(.separator).opacity(0.08), lineWidth: 0.5)
@@ -975,14 +941,6 @@ private enum DetailTab: Hashable {
     case intro
     case comments
     case related
-}
-
-private struct PlayerOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
 }
 
 private enum CommentSortMode: CaseIterable {
