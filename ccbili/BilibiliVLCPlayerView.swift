@@ -125,10 +125,14 @@ struct BilibiliVLCPlayerView: View {
             let orientation = UIDevice.current.orientation
 
             if orientation == .landscapeLeft || orientation == .landscapeRight {
-                fullscreenOrientation = orientation
-                isFullscreenPresented = true
+                withAnimation(.easeInOut(duration: 0.28)) {
+                    fullscreenOrientation = orientation
+                    isFullscreenPresented = true
+                }
             } else if orientation == .portrait || orientation == .portraitUpsideDown {
-                isFullscreenPresented = false
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    isFullscreenPresented = false
+                }
             }
         }
         .onReceive(diagnosticsTimer) { _ in
@@ -689,7 +693,9 @@ private struct FullscreenPlayerWindowPresenter: UIViewRepresentable {
             )
 
             if let hostingController {
-                hostingController.rootView = overlay
+                withAnimation(.easeInOut(duration: 0.24)) {
+                    hostingController.rootView = overlay
+                }
                 return
             }
 
@@ -704,18 +710,44 @@ private struct FullscreenPlayerWindowPresenter: UIViewRepresentable {
             let controller = UIHostingController(rootView: overlay)
             controller.view.backgroundColor = .black
             newWindow.rootViewController = controller
+            newWindow.alpha = 0
             newWindow.isHidden = false
             window = newWindow
             hostingController = controller
+
+            UIView.animate(
+                withDuration: 0.24,
+                delay: 0,
+                options: [.curveEaseInOut, .beginFromCurrentState]
+            ) {
+                newWindow.alpha = 1
+            }
         }
 
         @MainActor
         func dismiss(commandCenter: BilibiliVLCCommandCenter?) {
-            commandCenter?.attachPlayerLayer(nil)
-            onLayerDetachedChange?(false)
-            hostingController = nil
-            window?.isHidden = true
-            window = nil
+            guard let window else {
+                commandCenter?.attachPlayerLayer(nil)
+                onLayerDetachedChange?(false)
+                hostingController = nil
+                return
+            }
+
+            UIView.animate(
+                withDuration: 0.22,
+                delay: 0,
+                options: [.curveEaseInOut, .beginFromCurrentState]
+            ) {
+                window.alpha = 0
+            } completion: { [weak self] _ in
+                Task { @MainActor in
+                    commandCenter?.attachPlayerLayer(nil)
+                    self?.onLayerDetachedChange?(false)
+                    self?.hostingController = nil
+                    window.isHidden = true
+                    self?.window = nil
+                }
+            }
         }
     }
 }
@@ -813,6 +845,7 @@ private struct FullscreenPlayerOverlay: View {
             }
         }
         .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.28), value: orientation)
     }
 
     private var rotationAngle: Angle {
