@@ -17,10 +17,10 @@ struct VideoDetailView: View {
 
     @State private var likeErrorMessage: String?
     @State private var coinErrorMessage: String?
-    @State private var selectedTab: DetailTab = .intro
     @State private var commentSortMode: CommentSortMode = .hot
     @State private var videoAspectRatio: CGFloat = 16 / 9
     @State private var restoredPlaybackPosition: Double?
+    @State private var isShowingCommentsSheet = false
     @State private var selectedReplySheet: CommentReplySheetSelection?
     @State private var isLoadingComments = false
     @State private var isLoadingMoreComments = false
@@ -56,10 +56,10 @@ struct VideoDetailView: View {
                     errorSection
                         .frame(width: contentWidth)
 
-                    tabSection
+                    commentsButtonSection
                         .frame(width: contentWidth)
 
-                    animatedTabContentSection
+                    introContent
                         .frame(width: contentWidth)
                 }
                 .padding(.horizontal, pageHorizontalInset)
@@ -88,9 +88,6 @@ struct VideoDetailView: View {
                 didLike = viewModel.viewerState.didLike
                 didCoin = viewModel.viewerState.didCoin
                 favoriteViewModel.isFavorite = viewModel.viewerState.didFavorite
-                if selectedTab == .comments {
-                    await reloadComments(sortMode: commentSortMode)
-                }
             }
 
             if authManager.isLoggedIn && authManager.avatarURL == nil {
@@ -99,38 +96,22 @@ struct VideoDetailView: View {
         }
         .refreshable {
             await viewModel.load()
-            if selectedTab == .comments {
+            if isShowingCommentsSheet {
                 await reloadComments(sortMode: commentSortMode)
             }
             favoriteViewModel.load(videoID: viewModel.playbackItem.id)
         }
         .onChange(of: commentSortMode) { _, newValue in
-            guard selectedTab == .comments else { return }
+            guard isShowingCommentsSheet else { return }
 
             Task {
                 await reloadComments(sortMode: newValue)
             }
         }
-        .onChange(of: selectedTab) { _, newValue in
-            guard newValue == .comments,
-                  viewModel.comments.isEmpty,
-                  !isLoadingComments else {
-                return
-            }
-
-            Task {
-                await reloadComments(sortMode: commentSortMode)
-            }
-        }
-        .sheet(item: $selectedReplySheet) { selection in
-            CommentRepliesSheet(
-                aid: selection.aid,
-                root: selection.root,
-                comment: selection.comment,
-                replyService: replyService
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
+        .sheet(isPresented: $isShowingCommentsSheet) {
+            commentsSheet
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .onDisappear {
             savePlaybackHistoryIfNeeded(force: true)
@@ -329,24 +310,6 @@ struct VideoDetailView: View {
                 metaChip(systemImage: "play.rectangle", text: statsText(viewModel.stats.views, fallback: "播放数待接入"))
                 metaChip(systemImage: "calendar", text: viewModel.uploadTimeText)
                 qualityPicker
-            }
-
-            if let fallbackMessage = viewModel.playbackFallbackMessage {
-                Label(fallbackMessage, systemImage: "arrow.down.circle")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
-            }
-
-            if let history = VideoPlaybackHistoryStore.history(for: viewModel.playbackItem.id) {
-                Label("上次看到 \(history.displayText)", systemImage: "clock.arrow.circlepath")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
             }
 
             actionSection
@@ -650,26 +613,75 @@ struct VideoDetailView: View {
         }
     }
 
-    // MARK: - Tabs
+    // MARK: - Comments Entry
 
-    private var tabSection: some View {
-        Picker("详情分区", selection: $selectedTab) {
-            Text("简介").tag(DetailTab.intro)
-            Text("评论").tag(DetailTab.comments)
+    private var commentsButtonSection: some View {
+        Button {
+            isShowingCommentsSheet = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .font(.subheadline.weight(.semibold))
+
+                Text("查看评论")
+                    .font(.subheadline.weight(.semibold))
+
+                Spacer()
+
+                if isLoadingComments {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "chevron.up")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 14)
+            .frame(height: 48)
+            .frame(maxWidth: .infinity)
+            .background(
+                Color(.secondarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+                    .strokeBorder(Color(.separator).opacity(0.08), lineWidth: 0.5)
+            }
         }
-        .pickerStyle(.segmented)
-        .frame(maxWidth: .infinity)
+        .buttonStyle(.plain)
     }
 
-    @ViewBuilder
-    private var animatedTabContentSection: some View {
-        switch selectedTab {
-        case .intro:
-            introContent
-        case .comments:
+    private var commentsSheet: some View {
+        NavigationStack {
             commentsContent
-        case .related:
-            EmptyView()
+                .navigationTitle("评论")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("关闭") {
+                            isShowingCommentsSheet = false
+                        }
+                    }
+                }
+                .task {
+                    guard viewModel.comments.isEmpty, !isLoadingComments else { return }
+                    await reloadComments(sortMode: commentSortMode)
+                }
+                .refreshable {
+                    await reloadComments(sortMode: commentSortMode)
+                }
+                .sheet(item: $selectedReplySheet) { selection in
+                    CommentRepliesSheet(
+                        aid: selection.aid,
+                        root: selection.root,
+                        comment: selection.comment,
+                        replyService: replyService
+                    )
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                }
         }
     }
 
@@ -1471,12 +1483,6 @@ private struct CommentRepliesSheet: View {
             errorMessage = "更多回复加载失败：\(error.localizedDescription)"
         }
     }
-}
-
-private enum DetailTab: Hashable {
-    case intro
-    case comments
-    case related
 }
 
 private enum CommentSortMode: CaseIterable {
