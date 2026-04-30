@@ -1341,22 +1341,54 @@ private enum CommentSortMode: CaseIterable {
 private extension View {
     @ViewBuilder
     func detailContainerGlass(cornerRadius: CGFloat, interactive: Bool = false) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
         if #available(iOS 26, *) {
-            if interactive {
-                self.glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
-            } else {
-                self.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
-            }
+            self
+                .background(.regularMaterial, in: shape)
+                .overlay {
+                    shape
+                        .fill(Color(.secondarySystemBackground).opacity(0.18))
+                }
+                .overlay {
+                    shape
+                        .strokeBorder(Color(.separator).opacity(0.10), lineWidth: 0.5)
+                }
+                .modifier(
+                    NativeDetailGlassEffect(
+                        cornerRadius: cornerRadius,
+                        interactive: interactive
+                    )
+                )
         } else {
             self
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .background(.regularMaterial, in: shape)
                 .overlay {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .strokeBorder(Color(.separator).opacity(0.08), lineWidth: 0.5)
+                    shape
+                        .strokeBorder(Color(.separator).opacity(0.10), lineWidth: 0.5)
                 }
         }
     }
+}
 
+private struct NativeDetailGlassEffect: ViewModifier {
+    let cornerRadius: CGFloat
+    let interactive: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            if interactive {
+                content.glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
+            } else {
+                content.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+            }
+        } else {
+            content
+        }
+    }
+}
+
+private extension View {
     @ViewBuilder
     func liquidGlassSurface(cornerRadius: CGFloat, tint: Color? = nil, interactive: Bool = false) -> some View {
         if #available(iOS 26, *) {
