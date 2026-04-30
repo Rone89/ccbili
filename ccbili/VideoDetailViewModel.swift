@@ -24,6 +24,8 @@ final class VideoDetailViewModel {
     var viewerState = VideoViewerInteractionState()
 
     private let playURLCache = PlayURLCache.shared
+    private var playbackSourceTask: Task<Void, Never>?
+    private var playbackSourceLoadedAt: Date?
 
     init(item: VideoItem) {
         self.item = item
@@ -131,6 +133,7 @@ final class VideoDetailViewModel {
     }
 
     func preparePlaybackSource(bvid: String? = nil, cid: Int? = nil) {
+        playbackSourceTask?.cancel()
         let resolvedBVID = bvid ?? playbackItem.resolvedBVID
         let resolvedCID = cid ?? playbackItem.cid
 
@@ -145,7 +148,7 @@ final class VideoDetailViewModel {
         playbackErrorMessage = nil
         playbackFallbackMessage = nil
 
-        Task { [playURLCache] in
+        playbackSourceTask = Task { [playURLCache] in
             do {
                 let preferredQuality = PlaybackPreferences.preferredQuality
                 let source = try await Self.fetchPlayableSourceWithFallback(
@@ -155,23 +158,42 @@ final class VideoDetailViewModel {
                     playURLCache: playURLCache
                 )
 
+                guard !Task.isCancelled else { return }
+
                 await MainActor.run {
                     self.playbackSource = source
                     self.playURL = source.url
+                    self.playbackSourceLoadedAt = Date()
                     if source.quality != preferredQuality {
                         self.playbackFallbackMessage = "已自动切换到\(source.qualityDescription ?? "可播放清晰度")"
                     }
                     self.isLoadingPlaybackSource = false
                 }
             } catch {
+                guard !Task.isCancelled else { return }
+
                 await MainActor.run {
                     self.playbackSource = nil
                     self.playURL = nil
+                    self.playbackSourceLoadedAt = nil
                     self.playbackErrorMessage = error.localizedDescription
                     self.isLoadingPlaybackSource = false
                 }
             }
         }
+    }
+
+    func refreshPlaybackSourceAfterAuthenticationChange() async {
+        guard let bvid = playbackItem.resolvedBVID, let cid = playbackItem.cid else { return }
+        let sourceAge = playbackSourceLoadedAt.map { Date().timeIntervalSince($0) } ?? .infinity
+        let shouldRefreshExpiredSource = sourceAge > 60
+        if playbackSource?.quality == PlaybackPreferences.preferredQuality,
+           BiliAuthContext.cookieValue(named: "SESSDATA")?.isEmpty == false,
+           !shouldRefreshExpiredSource {
+            return
+        }
+        await playURLCache.removeAll()
+        preparePlaybackSource(bvid: bvid, cid: cid)
     }
 
     @MainActor
@@ -196,6 +218,7 @@ final class VideoDetailViewModel {
 
             playbackSource = source
             playURL = source.url
+            playbackSourceLoadedAt = Date()
             if let selectedQuality = source.quality {
                 PlaybackPreferences.savePreferredQuality(selectedQuality)
             }

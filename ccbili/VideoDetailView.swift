@@ -2,6 +2,7 @@ import SwiftUI
 
 struct VideoDetailView: View {
     @Environment(AuthManager.self) private var authManager
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var viewModel: VideoDetailViewModel
     @State private var favoriteViewModel = VideoFavoriteViewModel()
@@ -113,6 +114,15 @@ struct VideoDetailView: View {
 
             Task {
                 await reloadComments(sortMode: newValue)
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+
+            Task {
+                await BilibiliCookieStore.restoreEverywhere()
+                await authManager.refreshLoginStatus(allowOfflineFallback: true)
+                await viewModel.refreshPlaybackSourceAfterAuthenticationChange()
             }
         }
         .sheet(isPresented: $isShowingCommentsSheet) {
@@ -248,7 +258,7 @@ struct VideoDetailView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .detailContainerGlass(cornerRadius: cardCornerRadius)
+        .detailContainerGlass(cornerRadius: cardCornerRadius, interactive: true)
     }
 
     private var videoTitleText: some View {
@@ -624,7 +634,7 @@ struct VideoDetailView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .detailContainerGlass(cornerRadius: cardCornerRadius)
+        .detailContainerGlass(cornerRadius: cardCornerRadius, interactive: true)
     }
 
     // MARK: - Comments
@@ -764,11 +774,11 @@ struct VideoDetailView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(comment.username)
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
 
                     Text(comment.message)
                         .font(.body)
-                        .foregroundStyle(.gray)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
                     HStack(spacing: 12) {
@@ -788,9 +798,9 @@ struct VideoDetailView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             ForEach(comment.previewReplies, id: \.self) { reply in
                                 (Text("\(reply.username)：")
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(.primary)
                                  + Text(reply.message)
-                                    .foregroundStyle(.gray))
+                                    .foregroundStyle(.secondary))
                                     .font(.footnote)
                                     .lineLimit(2)
                             }
@@ -1204,7 +1214,7 @@ private struct CommentRepliesSheet: View {
                         HStack(spacing: 8) {
                             Text(comment.username)
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.primary)
 
                             Spacer()
 
@@ -1215,7 +1225,7 @@ private struct CommentRepliesSheet: View {
 
                         Text(comment.message)
                             .font(.body)
-                            .foregroundStyle(.gray)
+                            .foregroundStyle(.secondary)
                     }
                     .padding(.vertical, 4)
                 }
@@ -1247,11 +1257,11 @@ private struct CommentRepliesSheet: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(reply.username)
                                     .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(.primary)
 
                                 Text(reply.message)
                                     .font(.body)
-                                    .foregroundStyle(.gray)
+                                    .foregroundStyle(.secondary)
                             }
                             .padding(.vertical, 4)
                         }

@@ -45,17 +45,13 @@ struct PlayURLService {
         let quality = preferredQuality ?? defaultPreferredQuality
         let referer = "\(AppConfig.webBaseURL.absoluteString)/video/\(bvid)"
 
-        var headers = [
-            "Referer": referer,
-            "Origin": AppConfig.webBaseURL.absoluteString,
-            "User-Agent": AppConfig.desktopUserAgent,
-            "Accept-Encoding": "br,gzip"
-        ]
-        var isLoggedIn = false
-        if let cookieHeader = BilibiliCookieStore.cookieHeader() {
-            headers["Cookie"] = cookieHeader
-            isLoggedIn = cookieHeader.contains("SESSDATA=")
+        if quality > 80, BiliAuthContext.cookieValue(named: "SESSDATA")?.isEmpty != false {
+            await BilibiliCookieStore.restoreEverywhere()
         }
+
+        let authHeaders = playbackHeaders(referer: referer)
+        let headers = authHeaders.headers
+        let isLoggedIn = authHeaders.isLoggedIn
 
         if quality <= 80 {
             if let durlSource = try await fetchDURLSource(
@@ -111,6 +107,21 @@ struct PlayURLService {
             }
         }
         throw APIError.serverMessage("未获取到可播放的视频地址")
+    }
+
+    private func playbackHeaders(referer: String) -> (headers: [String: String], isLoggedIn: Bool) {
+        var headers = [
+            "Referer": referer,
+            "Origin": AppConfig.webBaseURL.absoluteString,
+            "User-Agent": AppConfig.desktopUserAgent,
+            "Accept-Encoding": "br,gzip"
+        ]
+        var isLoggedIn = false
+        if let cookieHeader = BilibiliCookieStore.cookieHeader() {
+            headers["Cookie"] = cookieHeader
+            isLoggedIn = cookieHeader.contains("SESSDATA=")
+        }
+        return (headers, isLoggedIn)
     }
 
     func fetchPlayableURL(bvid: String, cid: Int) async throws -> URL {

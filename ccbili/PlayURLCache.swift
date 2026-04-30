@@ -9,7 +9,7 @@ actor PlayURLCache {
     private var tasks: [String: Task<PlayableVideoSource, Error>] = [:]
 
     func source(bvid: String, cid: Int, preferredQuality: Int? = nil) async throws -> PlayableVideoSource {
-        let key = cacheKey(bvid: bvid, cid: cid, preferredQuality: preferredQuality)
+        let key = cacheKey(bvid: bvid, cid: cid, preferredQuality: preferredQuality, cookieFingerprint: cookieFingerprint())
         if let entry = values[key], Date().timeIntervalSince(entry.createdAt) < ttl {
             return entry.source
         }
@@ -37,7 +37,7 @@ actor PlayURLCache {
     }
 
     func warm(bvid: String, cid: Int, preferredQuality: Int? = nil) {
-        let key = cacheKey(bvid: bvid, cid: cid, preferredQuality: preferredQuality)
+        let key = cacheKey(bvid: bvid, cid: cid, preferredQuality: preferredQuality, cookieFingerprint: cookieFingerprint())
         if let entry = values[key], Date().timeIntervalSince(entry.createdAt) < ttl { return }
         if tasks[key] != nil { return }
 
@@ -51,14 +51,31 @@ actor PlayURLCache {
     }
 
     func remove(bvid: String, cid: Int, preferredQuality: Int? = nil) {
-        let key = cacheKey(bvid: bvid, cid: cid, preferredQuality: preferredQuality)
+        let key = cacheKey(bvid: bvid, cid: cid, preferredQuality: preferredQuality, cookieFingerprint: cookieFingerprint())
         values[key] = nil
         tasks[key]?.cancel()
         tasks[key] = nil
     }
 
-    private func cacheKey(bvid: String, cid: Int, preferredQuality: Int?) -> String {
-        "\(bvid)-\(cid)-\(preferredQuality ?? 112)"
+    func removeAll() {
+        values.removeAll()
+        for task in tasks.values {
+            task.cancel()
+        }
+        tasks.removeAll()
+    }
+
+    private func cacheKey(bvid: String, cid: Int, preferredQuality: Int?, cookieFingerprint: String) -> String {
+        "\(bvid)-\(cid)-\(preferredQuality ?? 112)-\(cookieFingerprint)"
+    }
+
+    private func cookieFingerprint() -> String {
+        guard let cookieHeader = BilibiliCookieStore.cookieHeader(),
+              cookieHeader.contains("SESSDATA=") else {
+            return "guest"
+        }
+
+        return "login-\(cookieHeader.hashValue)"
     }
 
     private struct Entry {
