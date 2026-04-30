@@ -30,7 +30,6 @@ struct HomeRecommendationCardView: View {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .strokeBorder(Color(.separator).opacity(0.08), lineWidth: 0.5)
         }
-        .shadow(color: .black.opacity(0.025), radius: 5, x: 0, y: 2)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
@@ -55,13 +54,10 @@ struct HomeRecommendationCardView: View {
         } else {
             RemoteImageView(
                 url: item.coverURL,
+                maxPixelLength: 640,
                 placeholder: {
-                    ZStack {
-                        Rectangle()
-                            .fill(Color(.tertiarySystemGroupedBackground))
-
-                        ProgressView()
-                    }
+                    Rectangle()
+                        .fill(Color(.tertiarySystemGroupedBackground))
                 },
                 failureView: { errorText in
                     ZStack {

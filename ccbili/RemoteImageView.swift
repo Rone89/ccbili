@@ -6,10 +6,12 @@
 //
 
 import SwiftUI
+import ImageIO
 import UIKit
 
 struct RemoteImageView<Placeholder: View, FailureView: View>: View {
     let url: URL?
+    let maxPixelLength: CGFloat
     @ViewBuilder let placeholder: () -> Placeholder
     let failureView: (String) -> FailureView
 
@@ -22,6 +24,18 @@ struct RemoteImageView<Placeholder: View, FailureView: View>: View {
         case loading
         case success
         case failure
+    }
+
+    init(
+        url: URL?,
+        maxPixelLength: CGFloat = 900,
+        @ViewBuilder placeholder: @escaping () -> Placeholder,
+        @ViewBuilder failureView: @escaping (String) -> FailureView
+    ) {
+        self.url = url
+        self.maxPixelLength = maxPixelLength
+        self.placeholder = placeholder
+        self.failureView = failureView
     }
 
     var body: some View {
@@ -48,6 +62,7 @@ struct RemoteImageView<Placeholder: View, FailureView: View>: View {
         }
     }
 
+    @MainActor
     private func loadImage() async {
         guard let url else {
             errorText = "图片地址为空"
@@ -63,6 +78,37 @@ struct RemoteImageView<Placeholder: View, FailureView: View>: View {
         errorText = "图片加载失败"
         phase = .loading
 
+        do {
+            let loadedImage = try await RemoteImagePipeline.shared.image(
+                from: url,
+                maxPixelLength: maxPixelLength
+            )
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            var transaction = Transaction()
+            transaction.animation = nil
+            withTransaction(transaction) {
+                image = loadedImage
+                phase = .success
+            }
+        } catch is CancellationError {
+        } catch {
+            errorText = error.localizedDescription
+            phase = .failure
+        }
+    }
+}
+
+private final class RemoteImagePipeline {
+    static let shared = RemoteImagePipeline()
+
+    private let session: URLSession
+    private let imageCache = NSCache<NSString, UIImage>()
+
+    private init() {
         var configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 8
         configuration.timeoutIntervalForResource = 15
@@ -73,49 +119,26 @@ struct RemoteImageView<Placeholder: View, FailureView: View>: View {
             diskPath: "ccbili-image-cache"
         )
 
-        let session = URLSession(configuration: configuration)
-
-        do {
-            let (data, response) = try await loadImageData(originalURL: url, session: session)
-
-            guard let httpResponse = response as? HTTPURLResponse else {
-                errorText = "响应无效"
-                phase = .failure
-                return
-            }
-
-            let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? "未知类型"
-
-            guard (200...299).contains(httpResponse.statusCode) else {
-                errorText = "状态码 \(httpResponse.statusCode)"
-                phase = .failure
-                return
-            }
-
-            guard let loadedImage = UIImage(data: data) else {
-                errorText = "解码失败\n\(contentType)"
-                phase = .failure
-                return
-            }
-
-            await MainActor.run {
-                var transaction = Transaction()
-                transaction.animation = nil
-                withTransaction(transaction) {
-                    image = loadedImage
-                    phase = .success
-                }
-            }
-        } catch {
-            errorText = error.localizedDescription
-            phase = .failure
-        }
+        session = URLSession(configuration: configuration)
+        imageCache.countLimit = 260
+        imageCache.totalCostLimit = 80 * 1024 * 1024
     }
 
-    private func loadImageData(originalURL: URL, session: URLSession) async throws -> (Data, URLResponse) {
+    func image(from originalURL: URL, maxPixelLength: CGFloat) async throws -> UIImage {
+        let originalCacheKey = cacheKey(for: originalURL, maxPixelLength: maxPixelLength)
+        if let cachedImage = imageCache.object(forKey: originalCacheKey) {
+            return cachedImage
+        }
+
         var lastError: Error?
         for candidateURL in imageCandidateURLs(from: originalURL) {
             do {
+                let candidateCacheKey = cacheKey(for: candidateURL, maxPixelLength: maxPixelLength)
+                if let cachedImage = imageCache.object(forKey: candidateCacheKey) {
+                    imageCache.setObject(cachedImage, forKey: originalCacheKey, cost: cacheCost(for: cachedImage))
+                    return cachedImage
+                }
+
                 var request = URLRequest(url: candidateURL)
                 request.setValue(AppConfig.defaultUserAgent, forHTTPHeaderField: "User-Agent")
                 request.setValue("https://www.bilibili.com/", forHTTPHeaderField: "Referer")
@@ -128,15 +151,63 @@ struct RemoteImageView<Placeholder: View, FailureView: View>: View {
                     lastError = APIError.invalidStatusCode(httpResponse.statusCode)
                     continue
                 }
-                if UIImage(data: data) != nil {
-                    return (data, response)
+
+                guard response is HTTPURLResponse else {
+                    lastError = APIError.invalidResponse
+                    continue
                 }
-                lastError = APIError.serverMessage("图片解码失败")
+
+                let decodedImage = try await decodeImage(from: data, maxPixelLength: maxPixelLength)
+                let cost = cacheCost(for: decodedImage)
+                imageCache.setObject(decodedImage, forKey: candidateCacheKey, cost: cost)
+                imageCache.setObject(decodedImage, forKey: originalCacheKey, cost: cost)
+                return decodedImage
             } catch {
                 lastError = error
             }
         }
         throw lastError ?? APIError.invalidResponse
+    }
+
+    private func decodeImage(from data: Data, maxPixelLength: CGFloat) async throws -> UIImage {
+        try await Task.detached(priority: .utility) {
+            let sourceOptions = [
+                kCGImageSourceShouldCache: false
+            ] as CFDictionary
+
+            guard let imageSource = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
+                throw APIError.serverMessage("图片解码失败")
+            }
+
+            let thumbnailOptions = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceShouldCacheImmediately: true,
+                kCGImageSourceThumbnailMaxPixelSize: max(1, Int(maxPixelLength.rounded(.up)))
+            ] as CFDictionary
+
+            if let thumbnail = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, thumbnailOptions) {
+                return UIImage(cgImage: thumbnail)
+            }
+
+            if let image = UIImage(data: data) {
+                return image
+            }
+
+            throw APIError.serverMessage("图片解码失败")
+        }.value
+    }
+
+    private func cacheKey(for url: URL, maxPixelLength: CGFloat) -> NSString {
+        "\(url.absoluteString)#\(Int(maxPixelLength.rounded(.up)))" as NSString
+    }
+
+    private func cacheCost(for image: UIImage) -> Int {
+        if let cgImage = image.cgImage {
+            return cgImage.bytesPerRow * cgImage.height
+        }
+
+        return Int(image.size.width * image.size.height * image.scale * image.scale * 4)
     }
 
     private func imageCandidateURLs(from url: URL) -> [URL] {

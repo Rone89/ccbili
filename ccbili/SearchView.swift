@@ -14,7 +14,7 @@ struct SearchView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            LazyVStack(alignment: .leading, spacing: 18) {
                 searchBar
                 scopePicker
                 searchHistorySection
@@ -26,7 +26,7 @@ struct SearchView: View {
             .padding(.top, 8)
             .padding(.bottom, 16)
         }
-        .background(Color(.systemBackground))
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle("搜索")
         .navigationBarTitleDisplayMode(.large)
         .onSubmit(of: .text) {
@@ -187,8 +187,14 @@ struct SearchView: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    .task {
-                        await viewModel.loadMoreIfNeeded(currentItem: item)
+                    .onAppear {
+                        guard item.id == viewModel.results.last?.id else {
+                            return
+                        }
+
+                        Task {
+                            await viewModel.loadMoreIfNeeded(currentItem: item)
+                        }
                     }
                 }
             }
@@ -198,7 +204,7 @@ struct SearchView: View {
     }
 
     private var usersResultList: some View {
-        VStack(spacing: 12) {
+        LazyVStack(spacing: 12) {
             ForEach(viewModel.userResults) { user in
                 NavigationLink {
                     UserProfileView(user: user)
@@ -206,8 +212,14 @@ struct SearchView: View {
                     userResultRow(user)
                 }
                 .buttonStyle(.plain)
-                .task {
-                    await viewModel.loadMoreUsersIfNeeded(currentItem: user)
+                .onAppear {
+                    guard user.id == viewModel.userResults.last?.id else {
+                        return
+                    }
+
+                    Task {
+                        await viewModel.loadMoreUsersIfNeeded(currentItem: user)
+                    }
                 }
             }
 
@@ -240,6 +252,7 @@ struct SearchView: View {
         HStack(spacing: 12) {
             RemoteImageView(
                 url: user.avatarURL,
+                maxPixelLength: 160,
                 placeholder: {
                     Circle()
                         .fill(Color(.tertiarySystemGroupedBackground))
@@ -283,7 +296,7 @@ struct SearchView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var historyTagsView: some View {
@@ -306,13 +319,13 @@ struct SearchView: View {
     }
 }
 
-private struct FlexibleTagFlowView: View {
+private struct FlexibleTagFlowView<Content: View>: View {
     let tags: [String]
-    let content: (String) -> AnyView
+    let content: (String) -> Content
 
-    init(tags: [String], @ViewBuilder content: @escaping (String) -> some View) {
+    init(tags: [String], @ViewBuilder content: @escaping (String) -> Content) {
         self.tags = tags
-        self.content = { tag in AnyView(content(tag)) }
+        self.content = content
     }
 
     var body: some View {

@@ -4,8 +4,8 @@ struct HomeView: View {
     @Environment(AuthManager.self) private var authManager
 
     @State private var viewModel = HomeViewModel()
-    @State private var scrollTargetID = UUID()
-    @State private var scrollOffset: CGFloat = 0
+
+    private let scrollTargetID = "home-top"
 
     private let columns = [
         GridItem(.flexible(), spacing: 10, alignment: .top),
@@ -15,15 +15,6 @@ struct HomeView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                GeometryReader { geometry in
-                    Color.clear
-                        .preference(
-                            key: HomeScrollOffsetPreferenceKey.self,
-                            value: geometry.frame(in: .named("homeScroll")).minY
-                        )
-                }
-                .frame(height: 0)
-
                 Color.clear
                     .frame(height: 1)
                     .id(scrollTargetID)
@@ -57,15 +48,9 @@ struct HomeView: View {
                 .padding(.top, 0)
                 .padding(.bottom, 20)
             }
-            .coordinateSpace(name: "homeScroll")
-            .onPreferenceChange(HomeScrollOffsetPreferenceKey.self) { value in
-                scrollOffset = value
-            }
             .onReceive(NotificationCenter.default.publisher(for: .homeTabDidRetap)) { _ in
-                Task {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        proxy.scrollTo(scrollTargetID, anchor: .top)
-                    }
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    proxy.scrollTo(scrollTargetID, anchor: .top)
                 }
             }
             .background(Color(.systemGroupedBackground))
@@ -105,14 +90,17 @@ struct HomeView: View {
                     HomeRecommendationCardView(item: item)
                 }
                 .buttonStyle(PressedCardButtonStyle())
-                .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                .task {
-                    await viewModel.loadMoreIfNeeded(currentItem: item)
-                    await viewModel.warmPlaybackSourceIfNeeded(for: item)
+                .onAppear {
+                    guard item.id == viewModel.items.last?.id else {
+                        return
+                    }
+
+                    Task {
+                        await viewModel.loadMoreIfNeeded(currentItem: item)
+                    }
                 }
             }
         }
-        .animation(.easeInOut(duration: 0.28), value: viewModel.items)
     }
 
     private var currentUserAvatarView: some View {
@@ -174,14 +162,6 @@ struct HomeView: View {
 
     private func refreshHome() async {
         await viewModel.load(forceRefresh: true)
-    }
-}
-
-private struct HomeScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }
 

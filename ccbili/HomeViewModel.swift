@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import SwiftUI
 
 @Observable
 final class HomeViewModel {
@@ -40,10 +39,8 @@ final class HomeViewModel {
 
         do {
             let mapped = try await fetchRecommendations()
-            withAnimation(.easeInOut(duration: 0.28)) {
-                recentlyInsertedIDs = []
-                items = mapped
-            }
+            recentlyInsertedIDs = []
+            items = mapped
         } catch APIError.cancelled {
         } catch {
             errorMessage = error.localizedDescription
@@ -68,9 +65,7 @@ final class HomeViewModel {
             let newItems = mapped.filter { !existingIDs.contains($0.id) }
 
             if !newItems.isEmpty {
-                withAnimation(.easeInOut(duration: 0.28)) {
-                    items.append(contentsOf: newItems)
-                }
+                items.append(contentsOf: newItems)
             }
         } catch APIError.cancelled {
         } catch {

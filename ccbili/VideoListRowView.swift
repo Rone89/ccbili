@@ -122,7 +122,6 @@ struct VideoListRowView: View {
             RoundedRectangle(cornerRadius: homeCardCornerRadius, style: .continuous)
                 .strokeBorder(Color(.separator).opacity(0.08), lineWidth: 0.5)
         }
-        .shadow(color: .black.opacity(0.025), radius: 5, x: 0, y: 2)
         .clipShape(RoundedRectangle(cornerRadius: homeCardCornerRadius, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: homeCardCornerRadius, style: .continuous))
     }
@@ -130,12 +129,10 @@ struct VideoListRowView: View {
     private func coverImage(cornerRadius: CGFloat, failureFontSize: CGFloat) -> some View {
         RemoteImageView(
             url: coverURL,
+            maxPixelLength: layoutStyle == .homeCard ? 640 : 900,
             placeholder: {
-                ZStack {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(Color(.tertiarySystemGroupedBackground))
-                    ProgressView()
-                }
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color(.tertiarySystemGroupedBackground))
             },
             failureView: { errorText in
                 ZStack {
