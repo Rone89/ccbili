@@ -1,6 +1,7 @@
 import UIKit
 
 enum AppOrientationController {
+    static let playerFullscreenOrientations: UIInterfaceOrientationMask = [.portrait, .landscapeLeft, .landscapeRight]
     static var supportedOrientations: UIInterfaceOrientationMask = .portrait
     private(set) static var isPlayerFullscreenActive = false
 
@@ -33,6 +34,11 @@ enum AppOrientationController {
         } else {
             allow(orientations, scene: scene)
         }
+    }
+
+    static func preparePlayerFullscreen(scene: UIWindowScene? = nil) {
+        isPlayerFullscreenActive = true
+        allow(playerFullscreenOrientations, scene: scene)
     }
 
     static func endPlayerFullscreen(scene: UIWindowScene? = nil) {

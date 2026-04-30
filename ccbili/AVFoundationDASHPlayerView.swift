@@ -348,22 +348,23 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
             isFullscreenActive = true
 
             playerViewController.preferredPresentationOrientation = interfaceOrientation
-            playerViewController.supportedOrientationMask = orientationMask
+            playerViewController.supportedOrientationMask = AppOrientationController.playerFullscreenOrientations
             playerViewController.onDismiss = { [weak self] dismissedController in
                 self?.handleAutomaticFullscreenDismissed(dismissedController)
             }
             inlineContainerController.detach(playerViewController)
             keepPlaybackRunningDuringFullscreenTransition()
 
-            AppOrientationController.beginPlayerFullscreen(
-                orientationMask,
-                scene: scene,
-                requestGeometryUpdate: false
-            )
+            AppOrientationController.preparePlayerFullscreen(scene: scene)
 
             presenter.present(playerViewController, animated: true) { [weak self] in
                 guard let self else { return }
+                guard self.playerViewController.presentingViewController != nil else {
+                    self.finishAutomaticFullscreenDismiss(restorePlayback: true, reinstallInlineOverlay: true)
+                    return
+                }
                 self.isAutomaticFullscreenTransitioning = false
+                self.playerViewController.supportedOrientationMask = orientationMask
                 self.playerViewController.setNeedsUpdateOfSupportedInterfaceOrientations()
                 AppOrientationController.beginPlayerFullscreen(
                     orientationMask,
