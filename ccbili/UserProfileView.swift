@@ -43,9 +43,6 @@ struct UserProfileView: View {
                 await viewModel.load()
             }
         }
-        .refreshable {
-            await viewModel.load()
-        }
     }
 
     private var profileHeader: some View {

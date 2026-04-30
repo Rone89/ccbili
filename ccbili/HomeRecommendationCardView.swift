@@ -54,7 +54,7 @@ struct HomeRecommendationCardView: View {
         } else {
             RemoteImageView(
                 url: item.coverURL,
-                maxPixelLength: 640,
+                maxPixelLength: 420,
                 placeholder: {
                     Rectangle()
                         .fill(Color(.tertiarySystemGroupedBackground))

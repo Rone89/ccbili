@@ -129,7 +129,7 @@ struct VideoListRowView: View {
     private func coverImage(cornerRadius: CGFloat, failureFontSize: CGFloat) -> some View {
         RemoteImageView(
             url: coverURL,
-            maxPixelLength: layoutStyle == .homeCard ? 640 : 900,
+            maxPixelLength: layoutStyle == .homeCard ? 420 : 560,
             placeholder: {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(Color(.tertiarySystemGroupedBackground))

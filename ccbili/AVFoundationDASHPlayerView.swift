@@ -197,6 +197,7 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
         func installOverlays(in controller: AVPlayerViewController) {
             guard let contentOverlayView = controller.contentOverlayView else { return }
             activeOverlayController = controller
+            contentOverlayView.isUserInteractionEnabled = isFullscreenActive
 
             if danmakuHostingController?.view.superview !== contentOverlayView {
                 danmakuHostingController?.willMove(toParent: nil)
@@ -207,6 +208,7 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
                     rootView: PlayerDanmakuOverlayView(videoBounds: controller.videoBounds, isFullscreen: false)
                 )
                 hostingController.view.backgroundColor = .clear
+                hostingController.view.isUserInteractionEnabled = false
                 hostingController.view.translatesAutoresizingMaskIntoConstraints = false
                 controller.addChild(hostingController)
                 contentOverlayView.addSubview(hostingController.view)
@@ -713,6 +715,7 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
         ) {
             capturePlaybackBeforeFullscreenTransition()
             isFullscreenActive = true
+            playerViewController.contentOverlayView?.isUserInteractionEnabled = true
             gestureContainerView?.allowsGestureHandling = true
             let interfaceOrientation = currentLandscapeOrientation()
             let orientationMask = interfaceOrientationMask(for: interfaceOrientation)
@@ -828,6 +831,7 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
 
             lastAppliedOverlayVideoBounds = convertedBounds
             lastAppliedOverlayFullscreenState = isFullscreen
+            contentOverlayView.isUserInteractionEnabled = isFullscreen
             gestureContainerView?.allowsGestureHandling = isFullscreen
             danmakuHostingController?.rootView = PlayerDanmakuOverlayView(
                 videoBounds: convertedBounds,

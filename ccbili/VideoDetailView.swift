@@ -30,10 +30,11 @@ struct VideoDetailView: View {
 
     private let biliPink = Color(red: 251 / 255, green: 114 / 255, blue: 153 / 255)
     private let replyService = ReplyService()
-    private let cardCornerRadius: CGFloat = 18
+    private let cardCornerRadius: CGFloat = 22
     private let pageHorizontalInset: CGFloat = 16
     private let playerAspectRatio: CGFloat = 16 / 9
     private let commentsSheetTopGap: CGFloat = 12
+    private let relatedVideosDisplayLimit = 6
 
     init(item: VideoItem) {
         _viewModel = State(initialValue: VideoDetailViewModel(item: item))
@@ -44,9 +45,7 @@ struct VideoDetailView: View {
             let contentWidth = max(proxy.size.width - pageHorizontalInset * 2, 0)
             let playerWidth = proxy.size.width
             let playerHeight = min(playerWidth / playerAspectRatio, proxy.size.height * 0.7)
-            let containerFrame = proxy.frame(in: .global)
-            let playerBottomY = containerFrame.minY + playerHeight
-            let commentsAvailableHeight = containerFrame.maxY - playerBottomY - commentsSheetTopGap
+            let commentsAvailableHeight = proxy.size.height - playerHeight - commentsSheetTopGap - proxy.safeAreaInsets.bottom
             let availableCommentsHeight = max(commentsAvailableHeight, 1)
             ZStack(alignment: .top) {
                 playerCardSection(height: playerHeight)
@@ -251,7 +250,7 @@ struct VideoDetailView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlassSurface(cornerRadius: cardCornerRadius)
+        .detailContainerGlass(cornerRadius: cardCornerRadius)
     }
 
     private var authorSummaryRow: some View {
@@ -465,7 +464,7 @@ struct VideoDetailView: View {
             .frame(height: 48)
             .frame(maxWidth: .infinity)
             .contentShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
-            .liquidGlassSurface(cornerRadius: cardCornerRadius, interactive: true)
+            .detailContainerGlass(cornerRadius: cardCornerRadius, interactive: true)
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
@@ -474,34 +473,77 @@ struct VideoDetailView: View {
     private var commentsSheet: some View {
         NavigationStack {
             List {
-                commentsContent
-                    .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                commentsHeaderRow
+                    .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 6, trailing: 16))
+                    .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
+
+                commentInputRow
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 10, trailing: 16))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+
+                if isLoadingComments && viewModel.comments.isEmpty {
+                    commentsLoadingRow(text: "正在加载评论...")
+                        .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                } else if let commentErrorMessage, viewModel.comments.isEmpty {
+                    commentsErrorRow(message: commentErrorMessage)
+                        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                } else if viewModel.comments.isEmpty {
+                    commentsEmptyRow
+                        .listRowInsets(EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                } else {
+                    ForEach(viewModel.comments) { comment in
+                        commentRow(comment)
+                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                            .onAppear {
+                                guard comment.id == viewModel.comments.last?.id else { return }
+
+                                Task {
+                                    await loadMoreCommentsIfNeeded(currentComment: comment)
+                                }
+                            }
+                    }
+
+                    commentsFooterRow
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 12, trailing: 16))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                }
             }
+            .listStyle(.plain)
             .scrollContentBackground(.hidden)
-                .navigationTitle("评论")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("关闭") {
-                            isShowingCommentsSheet = false
-                        }
+            .navigationTitle("评论")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") {
+                        isShowingCommentsSheet = false
                     }
                 }
-                .task {
-                    guard viewModel.comments.isEmpty, !isLoadingComments else { return }
-                    await reloadComments(sortMode: commentSortMode)
-                }
-                .sheet(item: $selectedReplySheet) { selection in
-                    CommentRepliesSheet(
-                        aid: selection.aid,
-                        root: selection.root,
-                        comment: selection.comment,
-                        replyService: replyService
-                    )
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                }
+            }
+            .task {
+                guard viewModel.comments.isEmpty, !isLoadingComments else { return }
+                await reloadComments(sortMode: commentSortMode)
+            }
+            .sheet(item: $selectedReplySheet) { selection in
+                CommentRepliesSheet(
+                    aid: selection.aid,
+                    root: selection.root,
+                    comment: selection.comment,
+                    replyService: replyService
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
         }
     }
 
@@ -532,7 +574,7 @@ struct VideoDetailView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     LazyVStack(spacing: 10) {
-                        ForEach(viewModel.relatedVideos) { related in
+                        ForEach(viewModel.relatedVideos.prefix(relatedVideosDisplayLimit)) { related in
                             NavigationLink {
                                 VideoDetailView(
                                     item: VideoItem(
@@ -558,239 +600,227 @@ struct VideoDetailView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlassSurface(cornerRadius: cardCornerRadius)
+        .detailContainerGlass(cornerRadius: cardCornerRadius)
     }
 
     // MARK: - Comments
 
-    private var commentsContent: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
+    private var commentsHeaderRow: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("评论")
                     .font(.headline)
 
-                Spacer()
-
-                Menu {
-                    ForEach(CommentSortMode.allCases, id: \.self) { mode in
-                        Button {
-                            commentSortMode = mode
-                        } label: {
-                            if mode == commentSortMode {
-                                Label(mode.title, systemImage: "checkmark")
-                            } else {
-                                Text(mode.title)
-                            }
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(commentSortMode.title)
-                            .font(.footnote)
-                        Image(systemName: "arrow.up.arrow.down")
-                            .font(.footnote)
-                    }
+                Text(viewModel.comments.isEmpty ? "一起聊聊这条视频" : "\(viewModel.comments.count) 条正在显示")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .liquidGlassSurface(cornerRadius: 999, interactive: true)
-                }
-                .buttonStyle(.plain)
             }
 
-            Button {
-            } label: {
-                HStack(spacing: 10) {
-                    currentUserAvatarView
+            Spacer()
 
-                    HStack {
-                        Text("说点什么吧...")
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-
-                        Spacer()
-
-                        HStack(spacing: 10) {
-                            Image(systemName: "face.smiling")
-                            Image(systemName: "photo")
+            Menu {
+                ForEach(CommentSortMode.allCases, id: \.self) { mode in
+                    Button {
+                        commentSortMode = mode
+                    } label: {
+                        if mode == commentSortMode {
+                            Label(mode.title, systemImage: "checkmark")
+                        } else {
+                            Text(mode.title)
                         }
-                        .foregroundStyle(.tertiary)
                     }
-                    .padding(.horizontal, 12)
-                    .frame(height: 38)
-                    .liquidGlassSurface(cornerRadius: 999, interactive: true)
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(commentSortMode.title)
+                        .font(.footnote)
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.footnote)
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .liquidGlassSurface(cornerRadius: 999, interactive: true)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var commentInputRow: some View {
+        Button {
+        } label: {
+            HStack(spacing: 10) {
+                currentUserAvatarView
+
+                HStack {
+                    Text("说点什么吧...")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    HStack(spacing: 10) {
+                        Image(systemName: "face.smiling")
+                        Image(systemName: "photo")
+                    }
+                    .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 38)
+                .liquidGlassSurface(cornerRadius: 999, interactive: true)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func commentsLoadingRow(text: String) -> some View {
+        HStack(spacing: 10) {
+            ProgressView()
+            Text(text)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    private func commentsErrorRow(message: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.red)
+
+            Button("重试加载评论") {
+                Task {
+                    await reloadComments(sortMode: commentSortMode)
                 }
             }
             .buttonStyle(.plain)
+            .controlSize(.small)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .liquidGlassSurface(cornerRadius: 999, interactive: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
-            Divider()
+    private var commentsEmptyRow: some View {
+        Text("暂无评论")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .center)
+    }
 
-            if isLoadingComments && viewModel.comments.isEmpty {
-                HStack(spacing: 10) {
-                    ProgressView()
-                    Text("正在加载评论...")
-                        .foregroundStyle(.secondary)
-                }
-            } else if let commentErrorMessage, viewModel.comments.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(commentErrorMessage)
-                        .font(.subheadline)
-                        .foregroundStyle(.red)
-
-                    Button("重试加载评论") {
-                        Task {
-                            await reloadComments(sortMode: commentSortMode)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .controlSize(.small)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .liquidGlassSurface(cornerRadius: 999, interactive: true)
-                }
-            } else if viewModel.comments.isEmpty {
-                Text("暂无评论")
-                    .foregroundStyle(.secondary)
-            } else {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    ForEach(viewModel.comments) { comment in
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack(alignment: .top, spacing: 10) {
-                                NavigationLink {
-                                    if let mid = Int(comment.userID ?? "") {
-                                        UserProfileView(mid: mid, username: comment.username)
-                                    } else {
-                                        UserSpaceWebView(userID: comment.userID, username: comment.username)
-                                    }
-                                } label: {
-                                    RemoteImageView(
-                                        url: comment.avatarURL,
-                                        maxPixelLength: 96,
-                                        placeholder: {
-                                            Circle()
-                                                .fill(Color(.quaternarySystemFill))
-                                        },
-                                        failureView: { _ in
-                                            Circle()
-                                                .fill(Color(.quaternarySystemFill))
-                                                .overlay {
-                                                    Image(systemName: "person.fill")
-                                                        .font(.system(size: 11))
-                                                        .foregroundStyle(.secondary)
-                                                }
-                                        }
-                                    )
-                                    .frame(width: 34, height: 34)
-                                    .clipShape(Circle())
-                                }
-                                .buttonStyle(.plain)
-
-                                VStack(alignment: .leading, spacing: 6) {
-                                    NavigationLink {
-                                        if let mid = Int(comment.userID ?? "") {
-                                            UserProfileView(mid: mid, username: comment.username)
-                                        } else {
-                                            UserSpaceWebView(userID: comment.userID, username: comment.username)
-                                        }
-                                    } label: {
-                                        Text(comment.username)
-                                            .font(.callout.weight(.semibold))
-                                            .foregroundStyle(.white)
-                                    }
-                                    .buttonStyle(.plain)
-
-                                    Text(comment.message)
-                                        .font(.body)
-                                        .foregroundStyle(.gray)
-
-                                    Text(comment.timeText)
-                                        .font(.footnote)
-                                        .foregroundStyle(.tertiary)
-
-                                    if !comment.previewReplies.isEmpty {
-                                        VStack(alignment: .leading, spacing: 6) {
-                                            ForEach(comment.previewReplies, id: \.self) { reply in
-                                                (Text("\(reply.username)：")
-                                                    .foregroundStyle(.white)
-                                                 + Text(reply.message)
-                                                    .foregroundStyle(.gray))
-                                                    .font(.footnote)
-                                                    .lineLimit(2)
-                                            }
-                                        }
-                                        .padding(.vertical, 4)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-
-                                    HStack(spacing: 16) {
-                                        Label("回复", systemImage: "bubble.left")
-                                            .font(.footnote)
-                                            .foregroundStyle(.tertiary)
-
-                                        Label(statsText(comment.likeCount, fallback: "点赞"), systemImage: "hand.thumbsup")
-                                            .font(.footnote)
-                                            .foregroundStyle(.tertiary)
-
-                                        Spacer()
-
-                                        if comment.replyCount > 0 {
-                                            Button(replyButtonTitle(for: comment)) {
-                                                presentReplies(for: comment)
-                                            }
-                                            .font(.footnote)
-                                            .foregroundStyle(.secondary)
-                                        }
-                                    }
-                                    .padding(.top, 2)
-                                }
-
-                                Spacer()
-                            }
-
-                            Divider()
-                        }
-                        .onAppear {
-                            guard comment.id == viewModel.comments.last?.id else {
-                                return
-                            }
-
-                            Task {
-                                await loadMoreCommentsIfNeeded(currentComment: comment)
-                            }
-                        }
-                    }
-                }
-
-                if isLoadingMoreComments {
-                    HStack(spacing: 10) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("正在加载更多评论...")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
-                } else if let commentErrorMessage {
-                    Button("评论加载失败，点此重试") {
-                        Task {
-                            await loadMoreComments()
-                        }
-                    }
-                    .font(.footnote)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
-                } else if !canLoadMoreComments {
-                    Text("没有更多评论了")
-                        .font(.footnote)
-                        .foregroundStyle(.tertiary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, 8)
+    @ViewBuilder
+    private var commentsFooterRow: some View {
+        if isLoadingMoreComments {
+            commentsLoadingRow(text: "正在加载更多评论...")
+                .font(.footnote)
+        } else if let commentErrorMessage {
+            Button("评论加载失败，点此重试") {
+                Task {
+                    await loadMoreComments()
                 }
             }
+            .font(.footnote)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, 8)
+        } else if !canLoadMoreComments {
+            Text("没有更多评论了")
+                .font(.footnote)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 8)
         }
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func commentRow(_ comment: VideoComment) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                commentAvatarView(comment)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(comment.username)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.white)
+
+                    Text(comment.message)
+                        .font(.body)
+                        .foregroundStyle(.gray)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 12) {
+                        Text(comment.timeText)
+                            .foregroundStyle(.tertiary)
+                        Text("回复")
+                            .foregroundStyle(.tertiary)
+
+                        Spacer(minLength: 8)
+
+                        Label(statsText(comment.likeCount, fallback: "点赞"), systemImage: "hand.thumbsup")
+                            .foregroundStyle(.tertiary)
+                    }
+                    .font(.footnote)
+
+                    if !comment.previewReplies.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(comment.previewReplies, id: \.self) { reply in
+                                (Text("\(reply.username)：")
+                                    .foregroundStyle(.white)
+                                 + Text(reply.message)
+                                    .foregroundStyle(.gray))
+                                    .font(.footnote)
+                                    .lineLimit(2)
+                            }
+                        }
+                        .padding(.top, 2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    if comment.replyCount > 0 {
+                        Button {
+                            presentReplies(for: comment)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(replyButtonTitle(for: comment))
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2.weight(.bold))
+                            }
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(biliPink)
+                            .padding(.vertical, 2)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            Divider()
+                .padding(.leading, 44)
+        }
+    }
+
+    private func commentAvatarView(_ comment: VideoComment) -> some View {
+        RemoteImageView(
+            url: comment.avatarURL,
+            maxPixelLength: 72,
+            placeholder: {
+                Circle()
+                    .fill(Color(.quaternarySystemFill))
+            },
+            failureView: { _ in
+                Circle()
+                    .fill(Color(.quaternarySystemFill))
+                    .overlay {
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+            }
+        )
+        .transaction { transaction in
+            transaction.animation = nil
+        }
+        .frame(width: 34, height: 34)
+        .clipShape(Circle())
     }
 
     private var currentUserAvatarView: some View {
@@ -833,7 +863,7 @@ struct VideoDetailView: View {
         HStack(spacing: 10) {
             RemoteImageView(
                 url: coverURL,
-                maxPixelLength: 260,
+                maxPixelLength: 220,
                 placeholder: {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(Color(.quaternarySystemFill))
@@ -1309,6 +1339,24 @@ private enum CommentSortMode: CaseIterable {
 }
 
 private extension View {
+    @ViewBuilder
+    func detailContainerGlass(cornerRadius: CGFloat, interactive: Bool = false) -> some View {
+        if #available(iOS 26, *) {
+            if interactive {
+                self.glassEffect(.regular.tint(Color.white.opacity(0.12)).interactive(), in: .rect(cornerRadius: cornerRadius))
+            } else {
+                self.glassEffect(.regular.tint(Color.white.opacity(0.12)), in: .rect(cornerRadius: cornerRadius))
+            }
+        } else {
+            self
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(Color(.separator).opacity(0.08), lineWidth: 0.5)
+                }
+        }
+    }
+
     @ViewBuilder
     func liquidGlassSurface(cornerRadius: CGFloat, tint: Color? = nil, interactive: Bool = false) -> some View {
         if #available(iOS 26, *) {
