@@ -1,12 +1,12 @@
 # 本版本说明
 
-## 修复问题
+## 继续优化播放器旋转一致性
 
-- 重构播放器横竖屏切换，不再用 SwiftUI `rotationEffect` 手动旋转视频和控制层。
-- 全屏播放改为系统方向转场，由 `UIWindowScene.requestGeometryUpdate` 和 `viewWillTransition(to:with:)` 驱动。
-- AVPlayerLayer 的 frame 更新通过 `CATransaction` 控制隐式动画，避免和 UIView/系统旋转动画打架。
-- 横竖屏切换时显式调用 `layoutIfNeeded()`，减少约束和 SwiftUI 布局不同步导致的跳变。
-- 固定 `videoGravity = .resizeAspect`，避免容器尺寸变化瞬间画面拉伸抖动。
+- 全屏时不再把内联 `AVPlayerLayer` 迁移到全屏窗口，避免图层被移除/重挂导致瞬间黑屏或跳变。
+- 全屏窗口改用独立镜像 `AVPlayerLayer` 绑定同一个 `AVPlayer`，内联层保持稳定。
+- 对方向通知增加去抖，避免同一次旋转中重复触发横屏/竖屏状态切换。
+- 保留系统方向转场和 `viewWillTransition(to:with:)` 的统一动画路径。
+- 继续使用 `CATransaction` 管理图层隐式动画，减少和系统旋转动画冲突。
 
 ## 打包说明
 

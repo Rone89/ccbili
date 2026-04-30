@@ -43,6 +43,7 @@ struct BilibiliVLCPlayerView: View {
     @State private var hasAppeared = false
     @State private var shouldResumeAfterVisibilityReturn = false
     @State private var isPlayerLayerDetachedForFullscreen = false
+    @State private var lastHandledFullscreenOrientation: UIDeviceOrientation = .unknown
     private let diagnosticsTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     init(
@@ -125,9 +126,13 @@ struct BilibiliVLCPlayerView: View {
             let orientation = UIDevice.current.orientation
 
             if orientation == .landscapeLeft || orientation == .landscapeRight {
+                guard !isFullscreenPresented || orientation != lastHandledFullscreenOrientation else { return }
+                lastHandledFullscreenOrientation = orientation
                 fullscreenOrientation = orientation
                 isFullscreenPresented = true
             } else if orientation == .portrait || orientation == .portraitUpsideDown {
+                guard isFullscreenPresented else { return }
+                lastHandledFullscreenOrientation = .unknown
                 isFullscreenPresented = false
             }
         }
@@ -152,12 +157,8 @@ struct BilibiliVLCPlayerView: View {
 
     private var playerSurface: some View {
         ZStack {
-            if isPlayerLayerDetachedForFullscreen {
-                Color.black
-            } else {
-                videoSurface
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            videoSurface
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if shouldUseCustomControls {
                 Color.black.opacity(0.001)
@@ -606,6 +607,7 @@ final class BilibiliVLCCommandCenter: ObservableObject {
     var seekHandler: ((Double, Bool) -> Void)?
     var stopHandler: (() -> Void)?
     var attachPlayerLayerHandler: ((AVPlayerLayer?) -> Void)?
+    var mirrorPlayerLayerHandler: ((AVPlayerLayer?) -> Void)?
 
     func togglePlay() {
         togglePlayHandler?()
@@ -629,6 +631,10 @@ final class BilibiliVLCCommandCenter: ObservableObject {
 
     func attachPlayerLayer(_ layer: AVPlayerLayer?) {
         attachPlayerLayerHandler?(layer)
+    }
+
+    func mirrorPlayerLayer(_ layer: AVPlayerLayer?) {
+        mirrorPlayerLayerHandler?(layer)
     }
 }
 
@@ -672,7 +678,7 @@ private struct FullscreenPlayerWindowPresenter: UIViewRepresentable {
         private var window: UIWindow?
         private var hostingController: UIHostingController<FullscreenPlayerOverlay>?
         private var rootController: FullscreenPlayerHostingController?
-        private let playerLayer = AVPlayerLayer()
+        private let fullscreenPlayerLayer = AVPlayerLayer()
         private var onLayerDetachedChange: ((Bool) -> Void)?
 
         @MainActor
@@ -717,10 +723,10 @@ private struct FullscreenPlayerWindowPresenter: UIViewRepresentable {
 
             let orientationMask = interfaceOrientationMask(for: orientation)
             AppOrientationController.lock(orientationMask, scene: scene)
-            commandCenter.attachPlayerLayer(playerLayer)
+            commandCenter.mirrorPlayerLayer(fullscreenPlayerLayer)
             onLayerDetachedChange(true)
             let overlay = FullscreenPlayerOverlay(
-                playerLayer: playerLayer,
+                playerLayer: fullscreenPlayerLayer,
                 playbackState: playbackState,
                 commandCenter: commandCenter,
                 debugText: debugText,
@@ -761,8 +767,9 @@ private struct FullscreenPlayerWindowPresenter: UIViewRepresentable {
         @MainActor
         func dismiss(commandCenter: BilibiliVLCCommandCenter?) {
             guard let window else {
-                commandCenter?.attachPlayerLayer(nil)
+                commandCenter?.mirrorPlayerLayer(nil)
                 onLayerDetachedChange?(false)
+                detachFullscreenLayer()
                 hostingController = nil
                 return
             }
@@ -776,14 +783,22 @@ private struct FullscreenPlayerWindowPresenter: UIViewRepresentable {
                 window.rootViewController?.view.layoutIfNeeded()
             } completion: { [weak self] _ in
                 Task { @MainActor in
-                    commandCenter?.attachPlayerLayer(nil)
+                    commandCenter?.mirrorPlayerLayer(nil)
                     self?.onLayerDetachedChange?(false)
+                    self?.detachFullscreenLayer()
                     self?.hostingController = nil
                     self?.rootController = nil
                     window.isHidden = true
                     self?.window = nil
                     AppOrientationController.lock(.portrait, scene: window.windowScene)
                 }
+            }
+        }
+
+        private func detachFullscreenLayer() {
+            CATransaction.performWithoutActions {
+                fullscreenPlayerLayer.player = nil
+                fullscreenPlayerLayer.removeFromSuperlayer()
             }
         }
 
@@ -1010,6 +1025,7 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
         private var currentSource: PlayableVideoSource?
         private var timeObserver: Any?
         private var isUsingExternalPlayerLayer = false
+        private weak var mirroredPlayerLayer: AVPlayerLayer?
 
         init(playbackState: BilibiliVLCPlaybackState, commandCenter: BilibiliVLCCommandCenter) {
             self.playbackState = playbackState
@@ -1117,6 +1133,16 @@ private struct BilibiliVLCVideoSurface: UIViewRepresentable {
                         inlinePlayerLayer.videoGravity = .resizeAspect
                         inlinePlayerLayer.player = self.player
                     }
+                }
+            }
+
+            commandCenter?.mirrorPlayerLayerHandler = { [weak self] layer in
+                guard let self else { return }
+                CATransaction.performWithoutActions {
+                    self.mirroredPlayerLayer?.player = nil
+                    self.mirroredPlayerLayer = layer
+                    layer?.videoGravity = .resizeAspect
+                    layer?.player = self.player
                 }
             }
         }
