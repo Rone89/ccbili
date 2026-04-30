@@ -127,8 +127,10 @@ struct BilibiliVLCPlayerView: View {
             switch newPhase {
             case .active:
                 resumeAfterVisibilityReturn()
-            case .inactive, .background:
+            case .background:
                 pauseForVisibilityLoss()
+            case .inactive:
+                break
             @unknown default:
                 break
             }

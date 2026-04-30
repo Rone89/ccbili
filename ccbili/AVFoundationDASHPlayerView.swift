@@ -49,11 +49,10 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
         context.coordinator.onVideoSizeChange = onVideoSizeChange
-        if controller.player !== context.coordinator.player {
-            controller.player = context.coordinator.player
-        }
         context.coordinator.attachInlineController(controller)
-        context.coordinator.installOverlays(in: controller)
+        if context.coordinator.shouldUpdateInlineOverlays {
+            context.coordinator.installOverlays(in: controller)
+        }
         controller.showsPlaybackControls = true
         controller.allowsPictureInPicturePlayback = true
         controller.canStartPictureInPictureAutomaticallyFromInline = true
@@ -114,6 +113,12 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
             super.init()
             bindCommands()
             startDeviceOrientationObservation()
+        }
+
+        var shouldUpdateInlineOverlays: Bool {
+            automaticFullscreenController == nil
+                && !isAutomaticFullscreenTransitioning
+                && !isFullscreenActive
         }
 
         deinit {
@@ -349,7 +354,6 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
             controller.modalPresentationStyle = .fullScreen
             controller.view.backgroundColor = .black
             automaticFullscreenController = controller
-            inlinePlayerViewController.player = nil
             keepPlaybackRunningDuringFullscreenTransition()
 
             AppOrientationController.lock(
@@ -393,7 +397,7 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
                     self.automaticFullscreenController = nil
                 }
                 if reinstallInlineOverlay, let inlinePlayerViewController = self.inlinePlayerViewController {
-                    inlinePlayerViewController.player = self.player
+                    self.attachInlineController(inlinePlayerViewController)
                     (inlinePlayerViewController as? LandscapeAVPlayerController)?.supportedOrientationMask = [.portrait, .landscapeLeft, .landscapeRight]
                     self.installOverlays(in: inlinePlayerViewController)
                     AppOrientationController.lock(.portrait, scene: inlinePlayerViewController.view.window?.windowScene)
@@ -401,7 +405,9 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
                         self.restorePlaybackAfterFullscreenTransition()
                     }
                 } else {
-                    self.inlinePlayerViewController?.player = self.player
+                    if let inlinePlayerViewController = self.inlinePlayerViewController {
+                        self.attachInlineController(inlinePlayerViewController)
+                    }
                     AppOrientationController.lock(.portrait)
                 }
             }
@@ -416,7 +422,7 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
             automaticFullscreenController = nil
             isFullscreenActive = false
             if let inlinePlayerViewController {
-                inlinePlayerViewController.player = player
+                attachInlineController(inlinePlayerViewController)
                 (inlinePlayerViewController as? LandscapeAVPlayerController)?.supportedOrientationMask = [.portrait, .landscapeLeft, .landscapeRight]
                 installOverlays(in: inlinePlayerViewController)
                 AppOrientationController.lock(.portrait, scene: inlinePlayerViewController.view.window?.windowScene)
@@ -639,7 +645,6 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
                 releasePlaybackStateHoldAfterFullscreenTransition()
             } else {
                 isHoldingPlaybackStateForFullscreenTransition = false
-                player.pause()
                 updatePlaybackState()
             }
         }
