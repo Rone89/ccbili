@@ -653,6 +653,7 @@ private struct FullscreenPlayerWindowPresenter: UIViewRepresentable {
 
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.update(
+            presenterView: uiView,
             isPresented: isPresented,
             orientation: orientation,
             playbackState: playbackState,
@@ -675,7 +676,6 @@ private struct FullscreenPlayerWindowPresenter: UIViewRepresentable {
 
     final class Coordinator {
         fileprivate weak var commandCenter: BilibiliVLCCommandCenter?
-        private var window: UIWindow?
         private var hostingController: UIHostingController<FullscreenPlayerOverlay>?
         private var rootController: FullscreenPlayerHostingController?
         private let fullscreenPlayerLayer = AVPlayerLayer()
@@ -683,6 +683,7 @@ private struct FullscreenPlayerWindowPresenter: UIViewRepresentable {
 
         @MainActor
         func update(
+            presenterView: UIView,
             isPresented: Bool,
             orientation: UIDeviceOrientation,
             playbackState: BilibiliVLCPlaybackState,
@@ -695,6 +696,7 @@ private struct FullscreenPlayerWindowPresenter: UIViewRepresentable {
             self.onLayerDetachedChange = onLayerDetachedChange
             if isPresented {
                 present(
+                    presenterView: presenterView,
                     orientation: orientation,
                     playbackState: playbackState,
                     commandCenter: commandCenter,
@@ -709,6 +711,7 @@ private struct FullscreenPlayerWindowPresenter: UIViewRepresentable {
 
         @MainActor
         private func present(
+            presenterView: UIView,
             orientation: UIDeviceOrientation,
             playbackState: BilibiliVLCPlaybackState,
             commandCenter: BilibiliVLCCommandCenter,
@@ -716,13 +719,11 @@ private struct FullscreenPlayerWindowPresenter: UIViewRepresentable {
             onLayerDetachedChange: @escaping (Bool) -> Void,
             onDismiss: @escaping () -> Void
         ) {
-            guard let scene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .first(where: { $0.activationState == .foregroundActive })
+            guard let presenter = presenterView.nearestViewController,
+                  let scene = presenter.view.window?.windowScene
             else { return }
 
             let orientationMask = interfaceOrientationMask(for: orientation)
-            AppOrientationController.lock(orientationMask, scene: scene)
             commandCenter.mirrorPlayerLayer(fullscreenPlayerLayer)
             onLayerDetachedChange(true)
             let overlay = FullscreenPlayerOverlay(
@@ -734,39 +735,32 @@ private struct FullscreenPlayerWindowPresenter: UIViewRepresentable {
             )
 
             if let hostingController {
-                withAnimation(.easeInOut(duration: 0.24)) {
-                    hostingController.rootView = overlay
-                }
+                hostingController.rootView = overlay
+                rootController?.orientationMask = orientationMask
+                rootController?.preferredOrientation = interfaceOrientation(for: orientation)
+                rootController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+                AppOrientationController.lock(orientationMask, scene: scene)
                 return
             }
 
-            let newWindow = UIWindow(windowScene: scene)
-            newWindow.windowLevel = .alert + 1
-            newWindow.backgroundColor = .black
             let controller = FullscreenPlayerHostingController(rootView: overlay)
             controller.orientationMask = orientationMask
             controller.preferredOrientation = interfaceOrientation(for: orientation)
+            controller.modalPresentationStyle = .fullScreen
+            controller.modalTransitionStyle = .crossDissolve
             controller.view.backgroundColor = .black
-            newWindow.rootViewController = controller
-            newWindow.alpha = 0
-            newWindow.isHidden = false
-            window = newWindow
             hostingController = controller
             rootController = controller
 
-            UIView.animate(
-                withDuration: 0.28,
-                delay: 0,
-                options: [.curveEaseInOut, .beginFromCurrentState, .allowUserInteraction]
-            ) {
-                newWindow.alpha = 1
+            presenter.present(controller, animated: false) {
                 controller.view.layoutIfNeeded()
+                AppOrientationController.lock(orientationMask, scene: scene)
             }
         }
 
         @MainActor
         func dismiss(commandCenter: BilibiliVLCCommandCenter?) {
-            guard let window else {
+            guard let rootController else {
                 commandCenter?.mirrorPlayerLayer(nil)
                 onLayerDetachedChange?(false)
                 detachFullscreenLayer()
@@ -774,25 +768,34 @@ private struct FullscreenPlayerWindowPresenter: UIViewRepresentable {
                 return
             }
 
-            UIView.animate(
-                withDuration: 0.24,
-                delay: 0,
-                options: [.curveEaseInOut, .beginFromCurrentState, .allowUserInteraction]
-            ) {
-                window.alpha = 0
-                window.rootViewController?.view.layoutIfNeeded()
-            } completion: { [weak self] _ in
+            let scene = rootController.view.window?.windowScene
+            rootController.orientationMask = .portrait
+            rootController.preferredOrientation = .portrait
+            rootController.pendingDismissAfterTransition = true
+            rootController.onPortraitTransitionFinished = { [weak self, weak commandCenter] in
                 Task { @MainActor in
-                    commandCenter?.mirrorPlayerLayer(nil)
-                    self?.onLayerDetachedChange?(false)
-                    self?.detachFullscreenLayer()
-                    self?.hostingController = nil
-                    self?.rootController = nil
-                    window.isHidden = true
-                    self?.window = nil
-                    AppOrientationController.lock(.portrait, scene: window.windowScene)
+                    self?.finishDismiss(commandCenter: commandCenter)
                 }
             }
+            rootController.setNeedsUpdateOfSupportedInterfaceOrientations()
+            AppOrientationController.lock(.portrait, scene: scene)
+
+            Task { @MainActor [weak self, weak commandCenter] in
+                try? await Task.sleep(for: .milliseconds(450))
+                guard self?.rootController === rootController else { return }
+                self?.finishDismiss(commandCenter: commandCenter)
+            }
+        }
+
+        @MainActor
+        private func finishDismiss(commandCenter: BilibiliVLCCommandCenter?) {
+            guard let rootController else { return }
+            commandCenter?.mirrorPlayerLayer(nil)
+            onLayerDetachedChange?(false)
+            detachFullscreenLayer()
+            hostingController = nil
+            self.rootController = nil
+            rootController.dismiss(animated: false)
         }
 
         private func detachFullscreenLayer() {
@@ -815,6 +818,8 @@ private struct FullscreenPlayerWindowPresenter: UIViewRepresentable {
 private final class FullscreenPlayerHostingController: UIHostingController<FullscreenPlayerOverlay> {
     var orientationMask: UIInterfaceOrientationMask = .landscape
     var preferredOrientation: UIInterfaceOrientation = .landscapeRight
+    var pendingDismissAfterTransition = false
+    var onPortraitTransitionFinished: (() -> Void)?
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { orientationMask }
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { preferredOrientation }
@@ -825,6 +830,10 @@ private final class FullscreenPlayerHostingController: UIHostingController<Fulls
         super.viewWillTransition(to: size, with: coordinator)
         coordinator.animate { [weak self] _ in
             self?.view.layoutIfNeeded()
+        } completion: { [weak self] _ in
+            guard let self, self.pendingDismissAfterTransition else { return }
+            self.pendingDismissAfterTransition = false
+            self.onPortraitTransitionFinished?()
         }
     }
 }
@@ -976,6 +985,11 @@ private extension UIView {
     var inheritedAnimationDuration: TimeInterval {
         let duration = layer.animation(forKey: "bounds")?.duration ?? layer.animation(forKey: "position")?.duration ?? 0
         return duration > 0 ? duration : 0
+    }
+
+    var nearestViewController: UIViewController? {
+        sequence(first: self.next, next: { $0?.next })
+            .first { $0 is UIViewController } as? UIViewController
     }
 }
 
