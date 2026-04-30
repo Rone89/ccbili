@@ -9,8 +9,8 @@ enum AppOrientationController {
             .compactMap { $0 as? UIWindowScene }
             .first { $0.activationState == .foregroundActive }
 
-        targetScene?.windows.forEach {
-            $0.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+        targetScene?.windows.forEach { window in
+            window.rootViewController?.requestSupportedOrientationUpdate()
         }
 
         if #available(iOS 16.0, *) {
@@ -18,6 +18,13 @@ enum AppOrientationController {
         } else {
             UIViewController.attemptRotationToDeviceOrientation()
         }
+    }
+}
+
+private extension UIViewController {
+    func requestSupportedOrientationUpdate() {
+        setNeedsUpdateOfSupportedInterfaceOrientations()
+        presentedViewController?.requestSupportedOrientationUpdate()
     }
 }
 
