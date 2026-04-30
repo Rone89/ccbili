@@ -4,6 +4,11 @@ import Network
 final class LocalHLSProxyServer {
     static let shared = LocalHLSProxyServer()
 
+    enum RouteMode {
+        case proxy
+        case redirect
+    }
+
     private let queue = DispatchQueue(label: "ccbili.local-hls-proxy")
     private let serverPort: UInt16 = 28757
     private var listener: NWListener?
@@ -28,12 +33,12 @@ final class LocalHLSProxyServer {
         }
     }
 
-    func register(mediaURL: URL, headers: [String: String]) throws -> URL {
+    func register(mediaURL: URL, headers: [String: String], mode: RouteMode = .proxy) throws -> URL {
         try startIfNeeded()
         let id = queue.sync {
             routeCounter += 1
             let id = String(routeCounter)
-            routes[id] = Route(url: mediaURL)
+            routes[id] = Route(url: mediaURL, mode: mode)
             self.headers = headers
             return id
         }
@@ -155,9 +160,22 @@ final class LocalHLSProxyServer {
 
     private func handle(connection: NWConnection) {
         connection.start(queue: queue)
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [weak self] data, _, _, _ in
-            guard let self, let data, let request = String(data: data, encoding: .utf8) else {
-                self?.send(status: 400, body: Data(), connection: connection)
+        receiveNextRequest(on: connection)
+    }
+
+    private func receiveNextRequest(on connection: NWConnection) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [weak self] data, _, isComplete, error in
+            guard let self else { return }
+            guard let data, !data.isEmpty else {
+                if isComplete || error != nil {
+                    connection.cancel()
+                } else {
+                    self.receiveNextRequest(on: connection)
+                }
+                return
+            }
+            guard let request = String(data: data, encoding: .utf8) else {
+                self.send(status: 400, body: Data(), connection: connection)
                 return
             }
             Task {
@@ -225,6 +243,18 @@ final class LocalHLSProxyServer {
                     body: cachedResponse.data,
                     connection: connection
                 )
+                return
+            }
+
+            if route.mode == .redirect {
+                HLSPlaybackDiagnostics.shared.recordProxy(
+                    path: path,
+                    requestRange: rangeHeader,
+                    status: 302,
+                    responseRange: nil,
+                    bytes: 0
+                )
+                sendRedirect(to: route.url, connection: connection)
                 return
             }
 
@@ -335,7 +365,8 @@ final class LocalHLSProxyServer {
         var headerLines = [
             "HTTP/1.1 \(status) \(statusText)",
             "Content-Length: \(body.count)",
-            "Connection: close"
+            "Connection: keep-alive",
+            "Keep-Alive: timeout=30, max=100"
         ]
         for (key, value) in headers where key.lowercased() != "content-length" && key.lowercased() != "connection" {
             headerLines.append("\(key): \(value)")
@@ -344,13 +375,32 @@ final class LocalHLSProxyServer {
         headerLines.append("")
         var response = Data(headerLines.joined(separator: "\r\n").utf8)
         response.append(body)
-        connection.send(content: response, completion: .contentProcessed { _ in
-            connection.cancel()
+        connection.send(content: response, completion: .contentProcessed { [weak self] _ in
+            self?.receiveNextRequest(on: connection)
+        })
+    }
+
+    private func sendRedirect(to url: URL, connection: NWConnection) {
+        let headerLines = [
+            "HTTP/1.1 302 Found",
+            "Location: \(url.absoluteString)",
+            "Content-Length: 0",
+            "Cache-Control: no-cache",
+            "Access-Control-Allow-Origin: *",
+            "Connection: keep-alive",
+            "Keep-Alive: timeout=30, max=100",
+            "",
+            ""
+        ]
+        let response = Data(headerLines.joined(separator: "\r\n").utf8)
+        connection.send(content: response, completion: .contentProcessed { [weak self] _ in
+            self?.receiveNextRequest(on: connection)
         })
     }
 
     private struct Route {
         let url: URL
+        let mode: RouteMode
     }
 
     private struct CachedResponse {

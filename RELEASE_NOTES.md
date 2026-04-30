@@ -1,26 +1,28 @@
-# v0.1.134 - DASH/HLS 首屏加载提速
+# v0.1.135 - 深度优化 DASH/HLS 起播链路
 
 ## 更新内容
 
-- 本地 HLS 代理改为常驻复用，不再每次播放 DASH 分离流时取消并重新启动监听。
-- 切换新视频时只清理路由、清单和启动缓存，减少代理冷启动等待。
-- 生成 Master Playlist 后立即预取视频和音频的初始化片段以及首个媒体片段，帮助 AVPlayer 更快拿到起播所需数据。
-- DASH sidx 索引请求和本地代理 Range 请求统一使用 `Accept-Encoding: identity`，避免 Range 数据被压缩响应干扰。
-- AVPlayer 起播缓冲从偏保守模式改成快启模式，降低 `preferredForwardBufferDuration`，并关闭首屏阶段的过度等待。
-- 播放项 ready 后使用 `playImmediately(atRate:)`，减少 ready 到真正出画面的延迟。
+- AVPlayer 起播策略按快启+预缓存优化：关闭 `automaticallyWaitsToMinimizeStalling`，同时把 `preferredForwardBufferDuration` 提升到 30 秒。
+- DASH/HLS 播放改为通过 `AVURLAsset` 创建播放项，并在替换播放器前预热 `playable`，最多等待 1.2 秒，避免异常网络卡住。
+- 注入 `Referer`、`User-Agent`、Cookie、`Connection: keep-alive` 和 `Accept-Encoding: identity` 到 AVURLAsset，减少 B 站 CDN 限速和 Range 响应异常。
+- 本地 HLS Server 支持 Keep-Alive，同一个连接可连续返回 Master、音频清单、视频清单。
+- 媒体数据请求默认返回 302 Redirect 到 B 站真实 CDN，避免 App 侧搬运视频数据，降低 CPU、内存拷贝和发热。
+- 启动阶段预取的 init/首片仍优先命中本地缓存，未命中才走 302，兼顾首屏速度和后续直连效率。
+- M3U8 增加 `#EXT-X-START:TIME-OFFSET=0,PRECISE=YES`，并保留 `#EXT-X-INDEPENDENT-SEGMENTS`。
 
-## 体验变化
+## 性能说明
 
-- DASH 音视频分离流首屏等待时间更短。
-- 切换视频或清晰度时，本地代理启动成本更低。
-- 弱网下仍可能短暂停顿，但会更倾向于快速出画，而不是先等较长缓冲。
+- 首屏阶段：本地清单快速返回，AVURLAsset 先预热，播放器更早进入 ready。
+- 数据阶段：音视频媒体片段不再经过 App 本地代理中转，系统直接从 CDN 拉流。
+- Seek 阶段：独立片段标签和精准起点标签减少播放器对流稳定性的保守判断。
 
 ## 验证建议
 
-- 连续打开多个视频，观察第二个及以后视频是否比之前更快进入播放。
-- 播放 4K/HEVC/HDR DASH 分离流，确认能快速出画且有声音。
-- 拖动进度条后确认能恢复播放，且音画同步。
-- 观察诊断信息，确认本地代理没有 404/502，首个 init/segment 请求正常。
+- 打开 DASH 分离流视频，观察首屏出画是否更快。
+- 播放 4K/HEVC/HDR 视频，确认 302 后仍能带上必要 Header 并正常起播。
+- 暂停 10 秒后继续播放，观察是否已经继续预缓存。
+- 拖动进度条，确认音画同步且不会频繁卡住。
+- 连续切换多个视频，确认本地代理没有 404/502，且手机发热低于上一版。
 
 ## 打包说明
 

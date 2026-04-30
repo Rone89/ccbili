@@ -66,6 +66,7 @@ func generateHLSManifest(
     lines.append("#EXT-X-TARGETDURATION:\(targetDuration)")
     lines.append("#EXT-X-MEDIA-SEQUENCE:0")
     lines.append("#EXT-X-INDEPENDENT-SEGMENTS")
+    lines.append("#EXT-X-START:TIME-OFFSET=0,PRECISE=YES")
     lines.append(mapTag)
 
     for segment in segments where segment.duration > 0 {
@@ -187,6 +188,7 @@ func generateHLSMasterManifest(
     #EXTM3U
     #EXT-X-VERSION:7
     #EXT-X-INDEPENDENT-SEGMENTS
+    #EXT-X-START:TIME-OFFSET=0,PRECISE=YES
     #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="\(audioGroupID)",NAME="Bilibili Audio",DEFAULT=YES,AUTOSELECT=YES,URI="\(escapedAbsoluteURL(audioPlaylistURL.absoluteString))"
     #EXT-X-STREAM-INF:\(streamInfo)
     \(escapedAbsoluteURL(videoVariant.playlistURL.absoluteString))

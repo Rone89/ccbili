@@ -35,8 +35,16 @@ struct DashHLSManifestService {
             audioIndex: source.audioIndexRange
         )
 
-        let proxiedVideoURL = try LocalHLSProxyServer.shared.register(mediaURL: source.url, headers: source.headers)
-        let proxiedAudioURL = try LocalHLSProxyServer.shared.register(mediaURL: audioURL, headers: source.headers)
+        let proxiedVideoURL = try LocalHLSProxyServer.shared.register(
+            mediaURL: source.url,
+            headers: source.headers,
+            mode: .redirect
+        )
+        let proxiedAudioURL = try LocalHLSProxyServer.shared.register(
+            mediaURL: audioURL,
+            headers: source.headers,
+            mode: .redirect
+        )
 
         let videoPlaylistURL = try LocalHLSProxyServer.shared.reservePlaylistURL(name: "video.m3u8")
         let audioPlaylistURL = try LocalHLSProxyServer.shared.reservePlaylistURL(name: "audio.m3u8")

@@ -70,7 +70,7 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
         private weak var activeOverlayController: AVPlayerViewController?
         private var orientationObserver: NSObjectProtocol?
         private var isAutomaticFullscreenTransitioning = false
-        private let sourceForwardBufferDuration: TimeInterval = 0.8
+        private let sourceForwardBufferDuration: TimeInterval = 30
         private var danmakuHostingController: UIHostingController<PlayerDanmakuOverlayView>?
         private var gestureContainerView: PlayerGestureOverlayView?
         private var overlayConstraints: [NSLayoutConstraint] = []
@@ -838,9 +838,11 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
                 do {
                     HLSPlaybackDiagnostics.shared.reset()
                     let manifestURL = try await DashHLSManifestService().makeManifest(for: source)
+                    let asset = AVURLAsset(url: manifestURL, options: assetOptions(headers: source.headers))
+                    await prewarmAsset(asset)
                     guard !Task.isCancelled else { return }
                     await MainActor.run {
-                        let item = AVPlayerItem(url: manifestURL)
+                        let item = AVPlayerItem(asset: asset)
                         self.configureFastStart(item)
                         self.observe(item: item)
                         self.player.replaceCurrentItem(with: item)
@@ -939,7 +941,7 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
             if item.status != .readyToPlay {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self, weak item] in
                     guard let self, self.shouldAutoplay, item === self.player.currentItem else { return }
-                    self.player.play()
+                    self.player.playImmediately(atRate: 1)
                     self.updatePlaybackState()
                 }
             }
@@ -949,6 +951,23 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
             item.preferredForwardBufferDuration = sourceForwardBufferDuration
             item.canUseNetworkResourcesForLiveStreamingWhilePaused = true
             player.automaticallyWaitsToMinimizeStalling = false
+        }
+
+        private func prewarmAsset(_ asset: AVURLAsset) async {
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    await withCheckedContinuation { continuation in
+                        asset.loadValuesAsynchronously(forKeys: ["playable"]) {
+                            continuation.resume()
+                        }
+                    }
+                }
+                group.addTask {
+                    try? await Task.sleep(nanoseconds: 1_200_000_000)
+                }
+                await group.next()
+                group.cancelAll()
+            }
         }
 
         private func addTimeObserver() {
@@ -1087,6 +1106,7 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
             }
             enrichedHeaders["Accept"] = "*/*"
             enrichedHeaders["Connection"] = "keep-alive"
+            enrichedHeaders["Accept-Encoding"] = "identity"
             return ["AVURLAssetHTTPHeaderFieldsKey": enrichedHeaders]
         }
     }
