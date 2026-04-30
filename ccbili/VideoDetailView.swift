@@ -120,8 +120,6 @@ struct VideoDetailView: View {
             commentsSheet
                 .presentationDetents([.height(commentsSheetHeight)])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(.clear)
-                .presentationCornerRadius(30)
                 .presentationBackgroundInteraction(.enabled)
         }
         .onDisappear {
@@ -414,10 +412,7 @@ struct VideoDetailView: View {
             })
             .accessibilityLabel(statsText(viewModel.stats.shares, fallback: "分享"))
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 8)
         .frame(maxWidth: .infinity)
-        .liquidGlassSurface(cornerRadius: 16)
     }
 
     // MARK: - Errors
@@ -478,16 +473,14 @@ struct VideoDetailView: View {
 
     private var commentsSheet: some View {
         NavigationStack {
-            ScrollView {
+            List {
                 commentsContent
-                    .padding(.horizontal, pageHorizontalInset)
-                    .padding(.top, 12)
-                    .padding(.bottom, 24)
+                    .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                    .listRowBackground(Color.clear)
             }
-            .background(Color.clear)
+            .scrollContentBackground(.hidden)
                 .navigationTitle("评论")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbarBackground(.hidden, for: .navigationBar)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("关闭") {
@@ -509,11 +502,6 @@ struct VideoDetailView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                 }
-        }
-        .background {
-            Color.clear
-                .liquidGlassSurface(cornerRadius: 30)
-                .ignoresSafeArea()
         }
     }
 
@@ -707,13 +695,13 @@ struct VideoDetailView: View {
                                     } label: {
                                         Text(comment.username)
                                             .font(.callout.weight(.semibold))
-                                            .foregroundStyle(.primary)
+                                            .foregroundStyle(.white)
                                     }
                                     .buttonStyle(.plain)
 
                                     Text(comment.message)
                                         .font(.body)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(.gray)
 
                                     Text(comment.timeText)
                                         .font(.footnote)
@@ -722,15 +710,16 @@ struct VideoDetailView: View {
                                     if !comment.previewReplies.isEmpty {
                                         VStack(alignment: .leading, spacing: 6) {
                                             ForEach(comment.previewReplies, id: \.self) { reply in
-                                                Text("\(reply.username)：\(reply.message)")
+                                                (Text("\(reply.username)：")
+                                                    .foregroundStyle(.white)
+                                                 + Text(reply.message)
+                                                    .foregroundStyle(.gray))
                                                     .font(.footnote)
-                                                    .foregroundStyle(.secondary)
                                                     .lineLimit(2)
                                             }
                                         }
-                                        .padding(10)
+                                        .padding(.vertical, 4)
                                         .frame(maxWidth: .infinity, alignment: .leading)
-                                        .liquidGlassSurface(cornerRadius: 10)
                                     }
 
                                     HStack(spacing: 16) {
@@ -800,9 +789,8 @@ struct VideoDetailView: View {
                 }
             }
         }
-        .padding(14)
+        .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlassSurface(cornerRadius: cardCornerRadius)
     }
 
     private var currentUserAvatarView: some View {
@@ -879,9 +867,8 @@ struct VideoDetailView: View {
 
             Spacer(minLength: 0)
         }
-        .padding(10)
+        .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlassSurface(cornerRadius: 14, interactive: true)
     }
 
     // MARK: - Shared UI
@@ -1163,6 +1150,7 @@ private struct CommentRepliesSheet: View {
                         HStack(spacing: 8) {
                             Text(comment.username)
                                 .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white)
 
                             Spacer()
 
@@ -1173,7 +1161,7 @@ private struct CommentRepliesSheet: View {
 
                         Text(comment.message)
                             .font(.body)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(.gray)
                     }
                     .padding(.vertical, 4)
                 }
@@ -1205,10 +1193,11 @@ private struct CommentRepliesSheet: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(reply.username)
                                     .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.white)
 
                                 Text(reply.message)
                                     .font(.body)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(.gray)
                             }
                             .padding(.vertical, 4)
                         }

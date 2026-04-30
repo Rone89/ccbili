@@ -219,11 +219,13 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
 
                 let gestureView = PlayerGestureOverlayView()
                 gestureView.translatesAutoresizingMaskIntoConstraints = false
+                gestureView.allowsGestureHandling = isFullscreenActive
                 contentOverlayView.addSubview(gestureView)
                 installGestures(on: gestureView)
                 volumeController.attach(to: gestureView)
                 gestureContainerView = gestureView
             }
+            gestureContainerView?.allowsGestureHandling = isFullscreenActive
 
             NSLayoutConstraint.deactivate(overlayConstraints)
             overlayConstraints = [danmakuHostingController?.view, gestureContainerView].compactMap { $0 }.flatMap { overlayView in
@@ -711,6 +713,7 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
         ) {
             capturePlaybackBeforeFullscreenTransition()
             isFullscreenActive = true
+            gestureContainerView?.allowsGestureHandling = true
             let interfaceOrientation = currentLandscapeOrientation()
             let orientationMask = interfaceOrientationMask(for: interfaceOrientation)
             if let playerViewController = playerViewController as? LandscapeAVPlayerController {
@@ -746,6 +749,7 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
             } completion: { [weak self, weak playerViewController] _ in
                 guard let self, let playerViewController else { return }
                 self.isFullscreenActive = false
+                self.gestureContainerView?.allowsGestureHandling = false
                 if let playerViewController = playerViewController as? LandscapeAVPlayerController {
                     playerViewController.supportedOrientationMask = .portrait
                 }
@@ -824,6 +828,7 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
 
             lastAppliedOverlayVideoBounds = convertedBounds
             lastAppliedOverlayFullscreenState = isFullscreen
+            gestureContainerView?.allowsGestureHandling = isFullscreen
             danmakuHostingController?.rootView = PlayerDanmakuOverlayView(
                 videoBounds: convertedBounds,
                 isFullscreen: isFullscreen
@@ -1212,8 +1217,12 @@ private struct PlayerDanmakuOverlayView: View {
 
 private final class PlayerGestureOverlayView: UIView {
     var videoBounds: CGRect = .zero
+    var allowsGestureHandling = false
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        guard allowsGestureHandling else {
+            return false
+        }
         guard videoBounds != .zero else {
             return false
         }
