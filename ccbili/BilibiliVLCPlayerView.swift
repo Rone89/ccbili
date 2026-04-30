@@ -510,6 +510,7 @@ struct BilibiliVLCPlayerView: View {
     }
 
     private func pauseForVisibilityLoss() {
+        guard !AppOrientationController.isPlayerFullscreenActive else { return }
         shouldResumeAfterVisibilityReturn = true
         pendingSeekPosition = playbackState.position
         playbackState.pendingSeekPosition = playbackState.position

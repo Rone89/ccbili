@@ -326,14 +326,19 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
                 playerViewController.preferredPresentationOrientation = interfaceOrientation
                 playerViewController.supportedOrientationMask = orientationMask
                 playerViewController.setNeedsUpdateOfSupportedInterfaceOrientations()
-                AppOrientationController.lock(orientationMask, scene: playerViewController.view.window?.windowScene)
+                AppOrientationController.beginPlayerFullscreen(
+                    orientationMask,
+                    scene: playerViewController.view.window?.windowScene,
+                    requestGeometryUpdate: true
+                )
                 return
             }
 
             guard !isAutomaticFullscreenTransitioning,
                   let inlineContainerController,
                   inlineContainerController.view.window != nil,
-                  let presenter = inlineContainerController.view.nearestViewController,
+                  let scene = inlineContainerController.view.window?.windowScene,
+                  let presenter = (inlineContainerController.view.window?.rootViewController ?? inlineContainerController.view.nearestViewController)?.topPresentedViewController,
                   presenter.presentedViewController == nil else {
                 return
             }
@@ -350,16 +355,21 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
             inlineContainerController.detach(playerViewController)
             keepPlaybackRunningDuringFullscreenTransition()
 
-            AppOrientationController.lock(
+            AppOrientationController.beginPlayerFullscreen(
                 orientationMask,
-                scene: inlineContainerController.view.window?.windowScene
+                scene: scene,
+                requestGeometryUpdate: false
             )
 
             presenter.present(playerViewController, animated: true) { [weak self] in
                 guard let self else { return }
                 self.isAutomaticFullscreenTransitioning = false
                 self.playerViewController.setNeedsUpdateOfSupportedInterfaceOrientations()
-                AppOrientationController.lock(orientationMask, scene: self.playerViewController.view.window?.windowScene)
+                AppOrientationController.beginPlayerFullscreen(
+                    orientationMask,
+                    scene: self.playerViewController.view.window?.windowScene ?? scene,
+                    requestGeometryUpdate: true
+                )
                 self.installOverlays(in: self.playerViewController)
                 self.restorePlaybackAfterFullscreenTransition()
             }
@@ -409,9 +419,9 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
 
             if reinstallInlineOverlay, let inlineContainerController {
                 attachInlineContainer(inlineContainerController)
-                AppOrientationController.lock(.portrait, scene: inlineContainerController.view.window?.windowScene)
+                AppOrientationController.endPlayerFullscreen(scene: inlineContainerController.view.window?.windowScene)
             } else {
-                AppOrientationController.lock(.portrait)
+                AppOrientationController.endPlayerFullscreen()
             }
 
             if restorePlayback {
@@ -584,7 +594,11 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
                 playerViewController.preferredPresentationOrientation = interfaceOrientation
                 playerViewController.setNeedsUpdateOfSupportedInterfaceOrientations()
             }
-            AppOrientationController.lock(orientationMask, scene: playerViewController.view.window?.windowScene)
+            AppOrientationController.beginPlayerFullscreen(
+                orientationMask,
+                scene: playerViewController.view.window?.windowScene,
+                requestGeometryUpdate: true
+            )
             keepPlaybackRunningDuringFullscreenTransition()
             coordinator.animate { [weak self, weak playerViewController] _ in
                 guard let self, let playerViewController else { return }
@@ -611,7 +625,7 @@ struct AVFoundationDASHPlayerView: UIViewControllerRepresentable {
                 if let playerViewController = playerViewController as? LandscapeAVPlayerController {
                     playerViewController.supportedOrientationMask = [.portrait, .landscapeLeft, .landscapeRight]
                 }
-                AppOrientationController.lock(.portrait, scene: playerViewController.view.window?.windowScene)
+                AppOrientationController.endPlayerFullscreen(scene: playerViewController.view.window?.windowScene)
                 self.restorePlaybackAfterFullscreenTransition()
                 if let inlineContainerController = self.inlineContainerController {
                     self.attachInlineContainer(inlineContainerController)
@@ -998,6 +1012,17 @@ final class LandscapeAVPlayerController: AVPlayerViewController {
         if isBeingDismissed || navigationController?.isBeingDismissed == true {
             onDismiss?(self)
         }
+    }
+}
+
+private extension UIViewController {
+    var topPresentedViewController: UIViewController {
+        var controller = self
+        while let presentedController = controller.presentedViewController,
+              !presentedController.isBeingDismissed {
+            controller = presentedController
+        }
+        return controller
     }
 }
 

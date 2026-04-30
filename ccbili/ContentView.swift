@@ -38,7 +38,7 @@ struct ContentView: View {
                 .tag(MainTab.profile)
         }
         .onAppear {
-            AppOrientationController.lock(.portrait)
+            AppOrientationController.lockPortraitForPage()
         }
         .onChange(of: selectedTab) { oldValue, newValue in
             guard newValue == .home else { return }

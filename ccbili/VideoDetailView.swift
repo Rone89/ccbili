@@ -76,7 +76,7 @@ struct VideoDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
-            AppOrientationController.lock(.portrait)
+            AppOrientationController.lockPortraitForPage()
             if let history = VideoPlaybackHistoryStore.history(for: viewModel.playbackItem.id) {
                 restoredPlaybackPosition = history.position
                 playbackProgress.position = history.position
@@ -127,7 +127,7 @@ struct VideoDetailView: View {
         }
         .onDisappear {
             savePlaybackHistoryIfNeeded(force: true)
-            AppOrientationController.lock(.portrait)
+            AppOrientationController.lockPortraitForPage()
         }
     }
 
