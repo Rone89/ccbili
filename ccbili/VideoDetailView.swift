@@ -31,10 +31,8 @@ struct VideoDetailView: View {
 
     private let biliPink = Color(red: 251 / 255, green: 114 / 255, blue: 153 / 255)
     private let replyService = ReplyService()
-    private let detailCardCornerRadius: CGFloat = 20
     private let cardCornerRadius: CGFloat = 18
     private let pageHorizontalInset: CGFloat = 16
-    private let titleHorizontalInset: CGFloat = 16
 
     init(item: VideoItem) {
         _viewModel = State(initialValue: VideoDetailViewModel(item: item))
@@ -45,30 +43,34 @@ struct VideoDetailView: View {
             let contentWidth = max(proxy.size.width - pageHorizontalInset * 2, 0)
             let playerWidth = proxy.size.width
             let playerHeight = min(playerWidth / videoAspectRatio, proxy.size.height * 0.7)
-            let reservedTopHeight = playerHeight + proxy.safeAreaInsets.top + 96
-            let availableCommentsHeight = max(proxy.size.height - reservedTopHeight - proxy.safeAreaInsets.bottom, 160)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    playerCardSection(height: playerHeight)
-                        .frame(width: playerWidth)
-                        .padding(.horizontal, -pageHorizontalInset)
+            let commentsAvailableHeight = proxy.size.height - playerHeight - proxy.safeAreaInsets.bottom - 8
+            let availableCommentsHeight = max(commentsAvailableHeight, 160)
+            ZStack(alignment: .top) {
+                playerCardSection(height: playerHeight)
+                    .frame(width: playerWidth)
+                    .ignoresSafeArea(edges: .top)
+                    .zIndex(0)
 
-                    videoInfoSection
-                        .frame(width: contentWidth)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        videoInfoSection
+                            .frame(width: contentWidth)
 
-                    errorSection
-                        .frame(width: contentWidth)
+                        errorSection
+                            .frame(width: contentWidth)
 
-                    commentsButtonSection
-                        .frame(width: contentWidth)
+                        commentsButtonSection
+                            .frame(width: contentWidth)
 
-                    introContent
-                        .frame(width: contentWidth)
+                        introContent
+                            .frame(width: contentWidth)
+                    }
+                    .padding(.horizontal, pageHorizontalInset)
+                    .padding(.top, max(playerHeight - 28, 0))
+                    .padding(.bottom, 24)
+                    .frame(maxWidth: .infinity, alignment: .top)
                 }
-                .padding(.horizontal, pageHorizontalInset)
-                .padding(.top, 12)
-                .padding(.bottom, 24)
-                .frame(maxWidth: .infinity, alignment: .top)
+                .zIndex(1)
             }
             .background(Color(.systemGroupedBackground))
             .onAppear {
@@ -78,8 +80,10 @@ struct VideoDetailView: View {
                 commentsSheetHeight = newValue
             }
         }
-        .navigationTitle("视频详情")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
             AppOrientationController.lockPortraitForPage()
@@ -183,10 +187,10 @@ struct VideoDetailView: View {
                         systemImage: viewModel.isLoadingPlaybackSource ? "arrow.triangle.2.circlepath" : "wifi.exclamationmark"
                     )
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(.black.opacity(0.35), in: Capsule())
+                        .liquidGlassSurface(cornerRadius: 999)
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 14)
@@ -210,85 +214,27 @@ struct VideoDetailView: View {
                         }
                     }
 
-                    VStack(spacing: 4) {
-                        Text("视频播放区域")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
+                    Text(viewModel.isLoadingPlaybackSource ? "正在解析视频地址" : "视频暂时无法播放")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
 
-                        Text(viewModel.playbackErrorMessage ?? playbackPlaceholderText)
-                            .font(.caption)
+                    if let errorMessage = viewModel.errorMessage {
+                        Text(errorMessage)
+                            .font(.footnote)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                    } else {
+                        Text("请稍后重试，或尝试切换网络环境")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                     }
                 }
 
                 Spacer()
-
-                bottomPlaybackOverlay
             }
         }
-        .frame(maxWidth: .infinity)
         .frame(height: height)
-    }
-
-    private var playbackPlaceholderText: String {
-        if viewModel.isLoadingPlaybackSource {
-            return "正在获取 1080P 播放地址，评论和推荐会先加载"
-        }
-
-        return "正在获取播放地址"
-    }
-
-    private var bottomPlaybackOverlay: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 12) {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("等待播放")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white)
-
-                    Text("播放器正在准备中")
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.82))
-                        .lineLimit(1)
-                }
-
-                Spacer()
-
-                Image(systemName: "speaker.wave.2.fill")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.92))
-            }
-
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(.white.opacity(0.18))
-
-                    Capsule()
-                        .fill(.white.opacity(0.92))
-                        .frame(width: proxy.size.width * 0.12)
-                }
-            }
-            .frame(height: 4)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 14)
-        .background(
-            LinearGradient(
-                colors: [
-                    .clear,
-                    .black.opacity(0.18),
-                    .black.opacity(0.42)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
     }
 
     private func updateVideoAspectRatio(_ videoSize: CGSize) {
@@ -328,14 +274,7 @@ struct VideoDetailView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            Color(.secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-                .strokeBorder(Color(.separator).opacity(0.08), lineWidth: 0.5)
-        }
+        .liquidGlassSurface(cornerRadius: cardCornerRadius)
     }
 
     private var authorSummaryRow: some View {
@@ -364,7 +303,7 @@ struct VideoDetailView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(biliPink, in: Capsule())
+                .liquidGlassSurface(cornerRadius: 999, tint: biliPink.opacity(0.72), interactive: true)
         }
     }
 
@@ -415,7 +354,7 @@ struct VideoDetailView: View {
             .foregroundStyle(.primary)
             .padding(.horizontal, 12)
             .frame(height: 34)
-            .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
+            .liquidGlassSurface(cornerRadius: 999, interactive: true)
         }
         .buttonStyle(.plain)
         .disabled(availableQualityOptions.isEmpty || isSwitchingQuality || viewModel.isLoadingPlaybackSource)
@@ -444,105 +383,6 @@ struct VideoDetailView: View {
         playbackProgress.position = currentPosition
         restoredPlaybackPosition = currentPosition
         isSwitchingQuality = false
-    }
-
-    // MARK: - Title
-
-    private var titleCardSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(viewModel.playbackItem.title)
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(.primary)
-                .multilineTextAlignment(.leading)
-                .lineLimit(nil)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
-
-            HStack(spacing: 8) {
-                metaChip(systemImage: "calendar", text: viewModel.uploadTimeText)
-
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.horizontal, titleHorizontalInset)
-        .padding(.vertical, 16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            Color(.secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-                .strokeBorder(Color(.separator).opacity(0.08), lineWidth: 0.5)
-        }
-    }
-
-    // MARK: - Author
-
-    private var authorSection: some View {
-        Group {
-            if let author = viewModel.author {
-                HStack(spacing: 12) {
-                    authorProfileLink {
-                        RemoteImageView(
-                            url: author.avatarURL,
-                            maxPixelLength: 96,
-                            placeholder: {
-                                Circle()
-                                    .fill(Color(.quaternarySystemFill))
-                            },
-                            failureView: { _ in
-                                Circle()
-                                    .fill(Color(.quaternarySystemFill))
-                                    .overlay {
-                                        Image(systemName: "person.fill")
-                                            .foregroundStyle(.secondary)
-                                    }
-                            }
-                        )
-                        .frame(width: 46, height: 46)
-                        .clipShape(Circle())
-                    }
-
-                    authorProfileLink {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(author.name)
-                                .font(.subheadline.weight(.semibold))
-
-                            Text(author.followerText)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Spacer()
-
-                    Button("关注") {
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.regular)
-                    .buttonBorderShape(.capsule)
-                    .tint(biliPink)
-                }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    Color(.secondarySystemGroupedBackground),
-                    in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-                )
-            } else {
-                Text("暂无 UP 主信息")
-                    .foregroundStyle(.secondary)
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        Color(.secondarySystemGroupedBackground),
-                        in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-                    )
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Actions
@@ -598,10 +438,7 @@ struct VideoDetailView: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity)
-        .background(
-            Color(.tertiarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-        )
+        .liquidGlassSurface(cornerRadius: 16)
     }
 
     // MARK: - Errors
@@ -653,7 +490,7 @@ struct VideoDetailView: View {
             .padding(.horizontal, 14)
             .frame(height: 48)
             .frame(maxWidth: .infinity)
-            .commentLiquidGlass(cornerRadius: cardCornerRadius, interactive: true)
+            .liquidGlassSurface(cornerRadius: cardCornerRadius, interactive: true)
         }
         .buttonStyle(.plain)
     }
@@ -697,7 +534,7 @@ struct VideoDetailView: View {
         }
         .background {
             Color.clear
-                .commentLiquidGlass(cornerRadius: 30)
+                .liquidGlassSurface(cornerRadius: 30)
                 .ignoresSafeArea()
         }
     }
@@ -755,10 +592,7 @@ struct VideoDetailView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            Color(.secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-        )
+        .liquidGlassSurface(cornerRadius: cardCornerRadius)
     }
 
     // MARK: - Comments
@@ -793,7 +627,7 @@ struct VideoDetailView: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .commentLiquidGlass(cornerRadius: 999, interactive: true)
+                    .liquidGlassSurface(cornerRadius: 999, interactive: true)
                 }
                 .buttonStyle(.plain)
             }
@@ -818,7 +652,7 @@ struct VideoDetailView: View {
                     }
                     .padding(.horizontal, 12)
                     .frame(height: 38)
-                    .commentLiquidGlass(cornerRadius: 999, interactive: true)
+                    .liquidGlassSurface(cornerRadius: 999, interactive: true)
                 }
             }
             .buttonStyle(.plain)
@@ -842,8 +676,11 @@ struct VideoDetailView: View {
                             await reloadComments(sortMode: commentSortMode)
                         }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
                     .controlSize(.small)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .liquidGlassSurface(cornerRadius: 999, interactive: true)
                 }
             } else if viewModel.comments.isEmpty {
                 Text("暂无评论")
@@ -915,7 +752,7 @@ struct VideoDetailView: View {
                                         }
                                         .padding(10)
                                         .frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                        .liquidGlassSurface(cornerRadius: 10)
                                     }
 
                                     HStack(spacing: 16) {
@@ -987,7 +824,7 @@ struct VideoDetailView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .commentLiquidGlass(cornerRadius: cardCornerRadius)
+        .liquidGlassSurface(cornerRadius: cardCornerRadius)
     }
 
     private var currentUserAvatarView: some View {
@@ -1066,10 +903,7 @@ struct VideoDetailView: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            Color(.tertiarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-        )
+        .liquidGlassSurface(cornerRadius: 14, interactive: true)
     }
 
     // MARK: - Shared UI
@@ -1126,10 +960,7 @@ struct VideoDetailView: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 8)
             .frame(height: 34)
-            .background(
-                Color(.tertiarySystemGroupedBackground),
-                in: Capsule()
-            )
+            .liquidGlassSurface(cornerRadius: 999)
     }
 
     private func errorCard(title: String, message: String) -> some View {
@@ -1144,10 +975,7 @@ struct VideoDetailView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            Color(.secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-        )
+        .liquidGlassSurface(cornerRadius: cardCornerRadius)
     }
 
     // MARK: - Actions
@@ -1518,9 +1346,15 @@ private enum CommentSortMode: CaseIterable {
 
 private extension View {
     @ViewBuilder
-    func commentLiquidGlass(cornerRadius: CGFloat, interactive: Bool = false) -> some View {
+    func liquidGlassSurface(cornerRadius: CGFloat, tint: Color? = nil, interactive: Bool = false) -> some View {
         if #available(iOS 26, *) {
-            if interactive {
+            if let tint {
+                if interactive {
+                    self.glassEffect(.regular.tint(tint).interactive(), in: .rect(cornerRadius: cornerRadius))
+                } else {
+                    self.glassEffect(.regular.tint(tint), in: .rect(cornerRadius: cornerRadius))
+                }
+            } else if interactive {
                 self.glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
             } else {
                 self.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
