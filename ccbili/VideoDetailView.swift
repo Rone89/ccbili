@@ -66,7 +66,7 @@ struct VideoDetailView: View {
                             .frame(width: contentWidth)
                     }
                     .padding(.horizontal, pageHorizontalInset)
-                    .padding(.top, max(playerHeight - 28, 0))
+                    .padding(.top, playerHeight + 12)
                     .padding(.bottom, 24)
                     .frame(maxWidth: .infinity, alignment: .top)
                 }
