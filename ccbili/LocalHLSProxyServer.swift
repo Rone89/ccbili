@@ -57,6 +57,21 @@ final class LocalHLSProxyServer {
         return URL(string: "http://127.0.0.1:\(serverPort)/hls/\(id)")!
     }
 
+    func reservePlaylistURL(name: String) throws -> URL {
+        try startIfNeeded()
+        playlistCounter += 1
+        let safeName = name.replacingOccurrences(of: "/", with: "-")
+        let id = "\(playlistCounter)-\(safeName)"
+        return URL(string: "http://127.0.0.1:\(serverPort)/hls/\(id)")!
+    }
+
+    func registerPlaylist(_ content: String, for url: URL) {
+        let path = url.path
+        guard path.hasPrefix("/hls/") else { return }
+        let id = String(path.dropFirst("/hls/".count).split(separator: "?").first ?? "")
+        playlists[id] = content
+    }
+
     private func startIfNeeded() throws {
         if listener != nil, case .ready = listenerState { return }
         if listener != nil, case .setup = listenerState { return }

@@ -38,30 +38,22 @@ struct DashHLSManifestService {
         let proxiedVideoURL = try LocalHLSProxyServer.shared.register(mediaURL: source.url, headers: source.headers)
         let proxiedAudioURL = try LocalHLSProxyServer.shared.register(mediaURL: audioURL, headers: source.headers)
 
-        let videoPlaylist = mediaPlaylist(
-            mediaURL: proxiedVideoURL,
-            initRange: videoInitRange,
-            segments: parsedVideoSegments,
-            videoQuality: videoQualityText(for: source)
-        )
-
-        let audioPlaylist = mediaPlaylist(
-            mediaURL: proxiedAudioURL,
-            initRange: audioInitRange,
-            segments: parsedAudioSegments,
-            videoQuality: "SDR"
-        )
-
-        let videoPlaylistURL = try LocalHLSProxyServer.shared.registerPlaylist(videoPlaylist, name: "video.m3u8")
-        let audioPlaylistURL = try LocalHLSProxyServer.shared.registerPlaylist(audioPlaylist, name: "audio.m3u8")
-
-        let masterPlaylist = masterPlaylist(
+        let videoPlaylistURL = try LocalHLSProxyServer.shared.reservePlaylistURL(name: "video.m3u8")
+        let audioPlaylistURL = try LocalHLSProxyServer.shared.reservePlaylistURL(name: "audio.m3u8")
+        let manifests = manifestSet(
             source: source,
+            proxiedVideoURL: proxiedVideoURL,
+            videoInitRange: videoInitRange,
+            videoSegments: parsedVideoSegments,
+            proxiedAudioURL: proxiedAudioURL,
+            audioInitRange: audioInitRange,
+            audioSegments: parsedAudioSegments,
             videoPlaylistURL: videoPlaylistURL,
             audioPlaylistURL: audioPlaylistURL
         )
-
-        let masterURL = try LocalHLSProxyServer.shared.registerPlaylist(masterPlaylist, name: "master.m3u8")
+        LocalHLSProxyServer.shared.registerPlaylist(manifests.videoPlaylist, for: videoPlaylistURL)
+        LocalHLSProxyServer.shared.registerPlaylist(manifests.audioPlaylist, for: audioPlaylistURL)
+        let masterURL = try LocalHLSProxyServer.shared.registerPlaylist(manifests.masterPlaylist, name: "master.m3u8")
         try await LocalHLSProxyServer.shared.waitUntilReady()
         return masterURL
     }
@@ -96,46 +88,47 @@ struct DashHLSManifestService {
         return result
     }
 
-    private func mediaPlaylist(
-        mediaURL: URL,
-        initRange: ByteRange,
-        segments: [HLSSegment],
-        videoQuality: String
-    ) -> String {
-        generateHLSManifest(
-            initUrl: mediaURL.absoluteString,
-            initByteRange: DASHHLSByteRange(offset: initRange.offset, length: initRange.length),
-            segments: segments.map { segment in
-                DASHHLSSegment(
-                    url: mediaURL.absoluteString,
-                    duration: segment.duration,
-                    byteRange: DASHHLSByteRange(offset: segment.range.offset, length: segment.range.length)
-                )
-            },
-            videoQuality: videoQuality
-        )
-    }
-
-    private func masterPlaylist(
+    private func manifestSet(
         source: PlayableVideoSource,
+        proxiedVideoURL: URL,
+        videoInitRange: ByteRange,
+        videoSegments: [HLSSegment],
+        proxiedAudioURL: URL,
+        audioInitRange: ByteRange,
+        audioSegments: [HLSSegment],
         videoPlaylistURL: URL,
         audioPlaylistURL: URL
-    ) -> String {
+    ) -> BilibiliDASHHLSManifestSet {
         let codecs = [source.videoCodec, source.audioCodec]
             .compactMap { $0?.isEmpty == false ? $0 : nil }
             .joined(separator: ",")
 
-        return generateHLSMasterManifest(
+        return generateBilibiliDASHMasterManifest(
+            videoInitUrl: proxiedVideoURL.absoluteString,
+            videoInitByteRange: DASHHLSByteRange(offset: videoInitRange.offset, length: videoInitRange.length),
+            videoSegments: hlsSegments(from: videoSegments, mediaURL: proxiedVideoURL),
+            audioInitUrl: proxiedAudioURL.absoluteString,
+            audioInitByteRange: DASHHLSByteRange(offset: audioInitRange.offset, length: audioInitRange.length),
+            audioSegments: hlsSegments(from: audioSegments, mediaURL: proxiedAudioURL),
+            bandwidth: source.bandwidth ?? 2_000_000,
+            codecs: source.videoCodec ?? codecs,
+            audioCodec: source.audioCodec,
+            videoPlaylistURL: videoPlaylistURL,
             audioPlaylistURL: audioPlaylistURL,
-            videoVariant: HLSManifestVariant(
-                playlistURL: videoPlaylistURL,
-                bandwidth: source.bandwidth ?? 2_000_000,
-                resolution: resolutionText(width: source.width, height: source.height),
-                frameRate: normalizedFrameRate(source.frameRate),
-                codecs: codecs.isEmpty ? nil : codecs,
-                videoQuality: videoQualityText(for: source)
-            )
+            videoQuality: videoQualityText(for: source),
+            resolution: resolutionText(width: source.width, height: source.height),
+            frameRate: normalizedFrameRate(source.frameRate)
         )
+    }
+
+    private func hlsSegments(from segments: [HLSSegment], mediaURL: URL) -> [DASHHLSSegment] {
+        segments.map { segment in
+            DASHHLSSegment(
+                url: mediaURL.absoluteString,
+                duration: segment.duration,
+                byteRange: DASHHLSByteRange(offset: segment.range.offset, length: segment.range.length)
+            )
+        }
     }
 
     private func byteRange(from text: String?) -> ByteRange? {

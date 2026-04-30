@@ -26,6 +26,12 @@ struct HLSManifestVariant {
     let videoQuality: String
 }
 
+struct BilibiliDASHHLSManifestSet {
+    let masterPlaylist: String
+    let videoPlaylist: String
+    let audioPlaylist: String
+}
+
 func generateHLSManifest(
     initUrl: String,
     segments: [DASHHLSSegment],
@@ -74,11 +80,102 @@ func generateHLSManifest(
     return lines.joined(separator: "\n") + "\n"
 }
 
+func generateBilibiliDASHMasterManifest(
+    videoInitUrl: String,
+    videoSegments: [DASHHLSSegment],
+    audioInitUrl: String,
+    audioSegments: [DASHHLSSegment],
+    bandwidth: Int,
+    codecs: String,
+    audioCodec: String? = "mp4a.40.2",
+    videoPlaylistURL: URL,
+    audioPlaylistURL: URL,
+    videoQuality: String = "SDR",
+    resolution: String? = nil,
+    frameRate: String? = nil
+) -> BilibiliDASHHLSManifestSet {
+    let videoPlaylist = generateHLSManifest(
+        initUrl: videoInitUrl,
+        segments: videoSegments,
+        videoQuality: videoQuality
+    )
+    let audioPlaylist = generateHLSManifest(
+        initUrl: audioInitUrl,
+        segments: audioSegments,
+        videoQuality: "SDR"
+    )
+    let masterPlaylist = generateHLSMasterManifest(
+        audioPlaylistURL: audioPlaylistURL,
+        videoVariant: HLSManifestVariant(
+            playlistURL: videoPlaylistURL,
+            bandwidth: bandwidth,
+            resolution: resolution,
+            frameRate: frameRate,
+            codecs: hlsCodecs(videoCodecs: codecs, audioCodec: audioCodec),
+            videoQuality: videoQuality
+        )
+    )
+
+    return BilibiliDASHHLSManifestSet(
+        masterPlaylist: masterPlaylist,
+        videoPlaylist: videoPlaylist,
+        audioPlaylist: audioPlaylist
+    )
+}
+
+func generateBilibiliDASHMasterManifest(
+    videoInitUrl: String,
+    videoInitByteRange: DASHHLSByteRange?,
+    videoSegments: [DASHHLSSegment],
+    audioInitUrl: String,
+    audioInitByteRange: DASHHLSByteRange?,
+    audioSegments: [DASHHLSSegment],
+    bandwidth: Int,
+    codecs: String,
+    audioCodec: String? = "mp4a.40.2",
+    videoPlaylistURL: URL,
+    audioPlaylistURL: URL,
+    videoQuality: String = "SDR",
+    resolution: String? = nil,
+    frameRate: String? = nil
+) -> BilibiliDASHHLSManifestSet {
+    let videoPlaylist = generateHLSManifest(
+        initUrl: videoInitUrl,
+        initByteRange: videoInitByteRange,
+        segments: videoSegments,
+        videoQuality: videoQuality
+    )
+    let audioPlaylist = generateHLSManifest(
+        initUrl: audioInitUrl,
+        initByteRange: audioInitByteRange,
+        segments: audioSegments,
+        videoQuality: "SDR"
+    )
+    let masterPlaylist = generateHLSMasterManifest(
+        audioPlaylistURL: audioPlaylistURL,
+        videoVariant: HLSManifestVariant(
+            playlistURL: videoPlaylistURL,
+            bandwidth: bandwidth,
+            resolution: resolution,
+            frameRate: frameRate,
+            codecs: hlsCodecs(videoCodecs: codecs, audioCodec: audioCodec),
+            videoQuality: videoQuality
+        )
+    )
+
+    return BilibiliDASHHLSManifestSet(
+        masterPlaylist: masterPlaylist,
+        videoPlaylist: videoPlaylist,
+        audioPlaylist: audioPlaylist
+    )
+}
+
 func generateHLSMasterManifest(
     audioPlaylistURL: URL,
     videoVariant: HLSManifestVariant
 ) -> String {
-    var streamInfo = "BANDWIDTH=\(max(videoVariant.bandwidth, 256_000)),AUDIO=\"audio\""
+    let audioGroupID = "audio_group"
+    var streamInfo = "BANDWIDTH=\(max(videoVariant.bandwidth, 256_000)),AUDIO=\"\(audioGroupID)\""
     if let resolution = videoVariant.resolution { streamInfo += ",RESOLUTION=\(resolution)" }
     if let frameRate = videoVariant.frameRate { streamInfo += ",FRAME-RATE=\(frameRate)" }
     if let codecs = videoVariant.codecs, !codecs.isEmpty { streamInfo += ",CODECS=\"\(codecs)\"" }
@@ -89,9 +186,10 @@ func generateHLSMasterManifest(
     return """
     #EXTM3U
     #EXT-X-VERSION:7
-    #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="DASH Audio",DEFAULT=YES,AUTOSELECT=YES,URI="\(audioPlaylistURL.absoluteString)"
+    #EXT-X-INDEPENDENT-SEGMENTS
+    #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="\(audioGroupID)",NAME="Bilibili Audio",DEFAULT=YES,AUTOSELECT=YES,URI="\(escapedAbsoluteURL(audioPlaylistURL.absoluteString))"
     #EXT-X-STREAM-INF:\(streamInfo)
-    \(videoVariant.playlistURL.absoluteString)
+    \(escapedAbsoluteURL(videoVariant.playlistURL.absoluteString))
     """
 }
 
@@ -107,6 +205,30 @@ private func hlsVideoRange(for videoQuality: String) -> String? {
         return "PQ"
     }
     return nil
+}
+
+private func hlsCodecs(videoCodecs: String, audioCodec: String?) -> String? {
+    var codecs = videoCodecs
+        .split(separator: ",")
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+
+    if let audioCodec = audioCodec?.trimmingCharacters(in: .whitespacesAndNewlines),
+       !audioCodec.isEmpty,
+       !codecs.contains(where: isAudioCodec) {
+        codecs.append(audioCodec)
+    }
+
+    return codecs.isEmpty ? nil : codecs.joined(separator: ",")
+}
+
+private func isAudioCodec(_ codec: String) -> Bool {
+    let normalized = codec.lowercased()
+    return normalized.hasPrefix("mp4a")
+        || normalized.hasPrefix("ac-3")
+        || normalized.hasPrefix("ec-3")
+        || normalized.hasPrefix("alac")
+        || normalized.hasPrefix("opus")
 }
 
 private func escapedAbsoluteURL(_ value: String) -> String {
