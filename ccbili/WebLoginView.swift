@@ -118,6 +118,9 @@ private struct WebLoginWebView: UIViewRepresentable {
             name: .webLoginReloadRequested,
             object: nil
         )
+        Task {
+            await coordinator.syncCookies(from: uiView)
+        }
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
@@ -165,7 +168,7 @@ private struct WebLoginWebView: UIViewRepresentable {
             onLoadingChange(false)
         }
 
-        private func syncCookies(from webView: WKWebView) async {
+        func syncCookies(from webView: WKWebView) async {
             let cookieStore = webView.configuration.websiteDataStore.httpCookieStore
             let cookies = await cookieStore.allCookies()
 

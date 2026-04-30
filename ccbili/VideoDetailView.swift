@@ -21,15 +21,12 @@ struct VideoDetailView: View {
     @State private var commentSortMode: CommentSortMode = .hot
     @State private var videoAspectRatio: CGFloat = 16 / 9
     @State private var restoredPlaybackPosition: Double?
-    @State private var expandedCommentReplies: [String: [VideoCommentPreviewReply]] = [:]
-    @State private var loadingReplyCommentIDs: Set<String> = []
+    @State private var selectedReplySheet: CommentReplySheetSelection?
     @State private var isLoadingComments = false
     @State private var isLoadingMoreComments = false
     @State private var commentsNextOffset: String?
     @State private var canLoadMoreComments = false
     @State private var commentErrorMessage: String?
-    @State private var replyNextPages: [String: Int] = [:]
-    @State private var replyHasMore: [String: Bool] = [:]
 
     private let biliPink = Color(red: 251 / 255, green: 114 / 255, blue: 153 / 255)
     private let replyService = ReplyService()
@@ -124,6 +121,16 @@ struct VideoDetailView: View {
             Task {
                 await reloadComments(sortMode: commentSortMode)
             }
+        }
+        .sheet(item: $selectedReplySheet) { selection in
+            CommentRepliesSheet(
+                aid: selection.aid,
+                root: selection.root,
+                comment: selection.comment,
+                replyService: replyService
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .onDisappear {
             savePlaybackHistoryIfNeeded(force: true)
@@ -894,32 +901,14 @@ struct VideoDetailView: View {
                                         Spacer()
 
                                         if comment.replyCount > 0 {
-                                            let isExpanded = expandedCommentReplies[comment.id] != nil
-                                            let canLoadMoreReplies = replyHasMore[comment.id] == true
-                                            Button(replyButtonTitle(for: comment, isExpanded: isExpanded, canLoadMore: canLoadMoreReplies)) {
-                                                Task {
-                                                    await loadReplies(for: comment)
-                                                }
+                                            Button(replyButtonTitle(for: comment)) {
+                                                presentReplies(for: comment)
                                             }
                                             .font(.footnote)
                                             .foregroundStyle(.secondary)
                                         }
                                     }
                                     .padding(.top, 2)
-
-                                    if let expandedReplies = expandedCommentReplies[comment.id], !expandedReplies.isEmpty {
-                                        VStack(alignment: .leading, spacing: 6) {
-                                            ForEach(expandedReplies, id: \.self) { reply in
-                                                Text("\(reply.username)：\(reply.message)")
-                                                    .font(.footnote)
-                                                    .foregroundStyle(.secondary)
-                                                    .lineLimit(3)
-                                            }
-                                        }
-                                        .padding(10)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                    }
                                 }
 
                                 Spacer()
@@ -1208,9 +1197,6 @@ struct VideoDetailView: View {
         commentErrorMessage = nil
         commentsNextOffset = nil
         canLoadMoreComments = false
-        expandedCommentReplies = [:]
-        replyNextPages = [:]
-        replyHasMore = [:]
 
         defer {
             isLoadingComments = false
@@ -1292,46 +1278,15 @@ struct VideoDetailView: View {
         VideoPlaybackHistoryStore.save(videoID: viewModel.playbackItem.id, position: position)
     }
 
-    private func loadReplies(for comment: VideoComment) async {
-        guard let aid = viewModel.playbackItem.aid, let root = Int(comment.id) else { return }
-        if expandedCommentReplies[comment.id] != nil, replyHasMore[comment.id] != true {
-            expandedCommentReplies[comment.id] = nil
-            replyNextPages[comment.id] = nil
-            replyHasMore[comment.id] = nil
+    private func presentReplies(for comment: VideoComment) {
+        guard let aid = viewModel.playbackItem.aid, let root = Int(comment.id) else {
+            commentErrorMessage = "缺少评论信息，暂时无法查看回复"
             return
         }
-        loadingReplyCommentIDs.insert(comment.id)
-        defer { loadingReplyCommentIDs.remove(comment.id) }
-
-        do {
-            let pageNumber = replyNextPages[comment.id] ?? 1
-            let page = try await replyService.fetchReplyReplyPage(oid: aid, root: root, page: pageNumber)
-            let existingReplies = expandedCommentReplies[comment.id] ?? []
-            expandedCommentReplies[comment.id] = existingReplies + page.replies
-            replyNextPages[comment.id] = page.nextPage
-            replyHasMore[comment.id] = page.hasMore
-        } catch {
-            expandedCommentReplies[comment.id] = [
-                VideoCommentPreviewReply(username: "系统提示", message: "回复加载失败：\(error.localizedDescription)")
-            ]
-            replyNextPages[comment.id] = nil
-            replyHasMore[comment.id] = false
-        }
+        selectedReplySheet = CommentReplySheetSelection(aid: aid, root: root, comment: comment)
     }
 
-    private func replyButtonTitle(for comment: VideoComment, isExpanded: Bool, canLoadMore: Bool) -> String {
-        if loadingReplyCommentIDs.contains(comment.id) {
-            return "正在加载..."
-        }
-
-        if isExpanded && canLoadMore {
-            return "加载更多回复"
-        }
-
-        if isExpanded {
-            return "收起回复"
-        }
-
+    private func replyButtonTitle(for comment: VideoComment) -> String {
         return "查看 \(comment.replyCount) 条回复"
     }
 
@@ -1349,6 +1304,175 @@ struct VideoDetailView: View {
 private final class VideoPlaybackProgressTracker {
     var position: Double = 0
     var lastSavedPercent = -1
+}
+
+private struct CommentReplySheetSelection: Identifiable {
+    let aid: Int
+    let root: Int
+    let comment: VideoComment
+
+    var id: String {
+        comment.id
+    }
+}
+
+private struct CommentRepliesSheet: View {
+    let aid: Int
+    let root: Int
+    let comment: VideoComment
+    let replyService: ReplyService
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var replies: [VideoCommentPreviewReply] = []
+    @State private var isLoading = false
+    @State private var isLoadingMore = false
+    @State private var nextPage: Int?
+    @State private var hasMore = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Text(comment.username)
+                                .font(.subheadline.weight(.semibold))
+
+                            Spacer()
+
+                            Text(comment.timeText)
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+
+                        Text(comment.message)
+                            .font(.body)
+                            .foregroundStyle(.primary)
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                Section("全部回复") {
+                    if isLoading && replies.isEmpty {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                            Text("正在加载回复...")
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if let errorMessage, replies.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(errorMessage)
+                                .font(.subheadline)
+                                .foregroundStyle(.red)
+
+                            Button("重新加载") {
+                                Task {
+                                    await reloadReplies()
+                                }
+                            }
+                        }
+                    } else if replies.isEmpty {
+                        Text("暂无回复")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(Array(replies.enumerated()), id: \.offset) { _, reply in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(reply.username)
+                                    .font(.subheadline.weight(.semibold))
+
+                                Text(reply.message)
+                                    .font(.body)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+
+                        if hasMore {
+                            Button {
+                                Task {
+                                    await loadMoreReplies()
+                                }
+                            } label: {
+                                HStack {
+                                    Spacer()
+                                    if isLoadingMore {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                    } else {
+                                        Text("加载更多回复")
+                                    }
+                                    Spacer()
+                                }
+                            }
+                            .disabled(isLoadingMore)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("回复")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") {
+                        dismiss()
+                    }
+                }
+            }
+            .task {
+                await loadInitialRepliesIfNeeded()
+            }
+            .refreshable {
+                await reloadReplies()
+            }
+        }
+    }
+
+    private func loadInitialRepliesIfNeeded() async {
+        guard replies.isEmpty, !isLoading else { return }
+        await reloadReplies()
+    }
+
+    private func reloadReplies() async {
+        isLoading = true
+        errorMessage = nil
+        nextPage = nil
+        hasMore = false
+
+        defer {
+            isLoading = false
+        }
+
+        do {
+            let page = try await replyService.fetchReplyReplyPage(oid: aid, root: root, page: 1)
+            replies = page.replies
+            nextPage = page.nextPage
+            hasMore = page.hasMore
+        } catch {
+            replies = []
+            errorMessage = "回复加载失败：\(error.localizedDescription)"
+        }
+    }
+
+    private func loadMoreReplies() async {
+        guard hasMore, !isLoading, !isLoadingMore else { return }
+
+        isLoadingMore = true
+        errorMessage = nil
+        defer {
+            isLoadingMore = false
+        }
+
+        do {
+            let page = try await replyService.fetchReplyReplyPage(oid: aid, root: root, page: nextPage ?? 1)
+            replies.append(contentsOf: page.replies)
+            nextPage = page.nextPage
+            hasMore = page.hasMore
+        } catch {
+            errorMessage = "更多回复加载失败：\(error.localizedDescription)"
+        }
+    }
 }
 
 private enum DetailTab: Hashable {

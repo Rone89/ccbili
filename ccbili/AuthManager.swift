@@ -31,9 +31,13 @@ final class AuthManager {
             )
 
             guard response.code == 0, let data = response.data else {
-                isLoggedIn = false
-                username = nil
-                avatarURL = nil
+                if allowOfflineFallback, UserDefaults.standard.bool(forKey: "auth.lastKnownLoggedIn") {
+                    isLoggedIn = true
+                } else {
+                    isLoggedIn = false
+                    username = nil
+                    avatarURL = nil
+                }
                 persistLastKnownLoginState()
                 return
             }
@@ -92,6 +96,7 @@ final class AuthManager {
 
     private func persistLastKnownLoginState() {
         UserDefaults.standard.set(isLoggedIn, forKey: "auth.lastKnownLoggedIn")
+        UserDefaults.standard.synchronize()
     }
 
     private func normalizedImageURL(from path: String?) -> URL? {

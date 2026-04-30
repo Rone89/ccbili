@@ -31,12 +31,15 @@ struct ccbiliApp: App {
                             await authManager.refreshLoginStatus(allowOfflineFallback: true)
                         }
                     case .background:
+                        BilibiliCookieStore.persistSharedStorage()
                         Task {
-                            await BilibiliCookieStore.syncWebCookiesToSharedStorage()
-                            BilibiliCookieStore.persistSharedStorage()
+                            await BilibiliCookieStore.persistEverywhere()
                         }
                     case .inactive:
-                        break
+                        BilibiliCookieStore.persistSharedStorage()
+                        Task {
+                            await BilibiliCookieStore.persistEverywhere()
+                        }
                     @unknown default:
                         break
                     }
