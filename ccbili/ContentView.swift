@@ -57,6 +57,7 @@ private struct HomeTabRoot: View {
         NavigationStack {
             HomeView()
         }
+        .restoresInteractivePopGesture()
     }
 }
 
@@ -65,6 +66,7 @@ private struct SearchTabRoot: View {
         NavigationStack {
             SearchView()
         }
+        .restoresInteractivePopGesture()
     }
 }
 
@@ -73,6 +75,7 @@ private struct ProfileTabRoot: View {
         NavigationStack {
             ProfileView()
         }
+        .restoresInteractivePopGesture()
     }
 }
 

@@ -43,12 +43,12 @@ struct VideoDetailView: View {
             let contentWidth = max(proxy.size.width - pageHorizontalInset * 2, 0)
             let playerWidth = proxy.size.width
             let playerHeight = min(playerWidth / videoAspectRatio, proxy.size.height * 0.7)
-            let commentsAvailableHeight = proxy.size.height - playerHeight - proxy.safeAreaInsets.bottom - 8
+            let playerTopInset = proxy.safeAreaInsets.top
+            let commentsAvailableHeight = proxy.size.height - playerTopInset - playerHeight - proxy.safeAreaInsets.bottom - 8
             let availableCommentsHeight = max(commentsAvailableHeight, 160)
             ZStack(alignment: .top) {
                 playerCardSection(height: playerHeight)
                     .frame(width: playerWidth)
-                    .ignoresSafeArea(edges: .top)
                     .zIndex(0)
 
                 ScrollView {
@@ -82,9 +82,9 @@ struct VideoDetailView: View {
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+        .restoresInteractivePopGesture()
         .onAppear {
             AppOrientationController.lockPortraitForPage()
             if let history = VideoPlaybackHistoryStore.history(for: viewModel.playbackItem.id) {
@@ -490,9 +490,11 @@ struct VideoDetailView: View {
             .padding(.horizontal, 14)
             .frame(height: 48)
             .frame(maxWidth: .infinity)
+            .contentShape(RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
             .liquidGlassSurface(cornerRadius: cardCornerRadius, interactive: true)
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
     }
 
     private var commentsSheet: some View {
